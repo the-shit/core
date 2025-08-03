@@ -9,12 +9,17 @@ use function Laravel\Prompts\table;
 
 class LsCommand extends ConduitCommand
 {
-    protected $signature = 'ls {path?} {--json : Output as JSON} {--recent : Sort by recently modified} {--large : Sort by size} {--git : Show git status}';
+    protected $signature = 'ls {path?} {--json : Output as JSON} {--recent : Sort by recently modified} {--large : Sort by size} {--git : Show git status} {--octal : Show octal permissions} {--detailed-perms : Show full rwx permissions} {--guide : Show the sexy options guide}';
 
     protected $description = '💩 List files and directories (but actually good)';
 
     protected function executeCommand(): int
     {
+        // Check for custom guide first
+        if ($this->option('guide')) {
+            return $this->showSexyHelp();
+        }
+        
         $path = $this->argument('path') ?? getcwd();
         
         if (!is_dir($path)) {
@@ -35,6 +40,52 @@ class LsCommand extends ConduitCommand
         }
 
         return $this->displayInteractive($files, $path);
+    }
+    
+    private function showSexyHelp(): int
+    {
+        $this->smartInfo("💩 SNIT ls - The file lister that doesn't lie to you");
+        $this->smartNewLine();
+        
+        $this->smartLine("Usage: ./💩 ls [path] [options]");
+        $this->smartNewLine();
+        
+        table(
+            ['🚩 Flag', '📝 Description', '💡 Example'],
+            [
+                ['--json', 'Output as machine-readable JSON', './💩 ls --json'],
+                ['--recent', 'Sort by recently modified files first', './💩 ls --recent'],
+                ['--large', 'Sort by largest files first', './💩 ls --large'],
+                ['--git', 'Show git status indicators', './💩 ls --git'],
+                ['--octal', 'Show permissions as 755 format', './💩 ls --octal'],
+                ['--detailed-perms', 'Show full rwxr-xr-x format', './💩 ls --detailed-perms'],
+                ['--guide', 'Show this sexy options guide', './💩 ls --guide'],
+            ]
+        );
+        
+        $this->smartNewLine();
+        $this->smartLine("🎭 Permission Emojis:");
+        
+        table(
+            ['🎨 Emoji', '📊 Octal', '📝 Description'],
+            [
+                ['📁', '755', 'Directory with normal access'],
+                ['🔓', '755', 'Executable file'],
+                ['📖', '644', 'Standard readable file'],
+                ['🔒', '600', 'Private file (owner only)'],
+                ['🏠', '700', 'Private directory/file'],
+                ['📝', '666', 'World-writable file'],
+                ['🚨', '777', 'DANGEROUS: World-writable!'],
+                ['👁️', '444', 'Read-only file'],
+                ['🔍', '555', 'Read/execute only'],
+                ['🚫', '000', 'No permissions'],
+            ]
+        );
+        
+        $this->smartNewLine();
+        $this->smartLine("💩 Finally, a file lister that doesn't pretend to be enterprise-grade.");
+        
+        return self::SUCCESS;
     }
 
     private function scanDirectory(string $path): array
@@ -106,7 +157,72 @@ class LsCommand extends ConduitCommand
 
     private function getPermissions(string $path): string
     {
-        $perms = fileperms($path);
+        $perms = fileperms($path) & 0777;
+        $permString = $this->formatPermissionString($perms);
+        $isDir = is_dir($path);
+        
+        // Choose format based on flags
+        if ($this->option('detailed-perms')) {
+            return $this->getPermissionEmoji($perms, $isDir) . ' ' . $permString;
+        } elseif ($this->option('octal')) {
+            return $this->getPermissionEmoji($perms, $isDir) . ' ' . sprintf('%03o', $perms);
+        }
+        
+        // Default: emoji + description (different for dirs vs files)
+        if ($isDir) {
+            return match($perms) {
+                0755 => '📁 Dir Access',     // rwxr-xr-x
+                0700 => '🏠 Private Dir',    // rwx------
+                0777 => '🚨 World Write!',   // rwxrwxrwx (dangerous!)
+                0555 => '🔍 Read Only',      // r-xr-xr-x
+                0000 => '🚫 No Access',      // ---------
+                default => $this->getPermissionEmoji($perms, $isDir) . ' ' . sprintf('%03o', $perms)
+            };
+        } else {
+            return match($perms) {
+                0755 => '🔓 Executable',     // rwxr-xr-x
+                0644 => '📖 Standard',       // rw-r--r--
+                0600 => '🔒 Private',        // rw-------
+                0777 => '🚨 Dangerous!',     // rwxrwxrwx (world writable)
+                0700 => '🏠 Owner Only',     // rwx------
+                0666 => '📝 World Edit',     // rw-rw-rw-
+                0555 => '🔍 Read/Run',       // r-xr-xr-x
+                0444 => '👁️ Read Only',      // r--r--r--
+                0000 => '🚫 No Access',      // ---------
+                default => $this->getPermissionEmoji($perms, $isDir) . ' ' . sprintf('%03o', $perms)
+            };
+        }
+    }
+    
+    private function getPermissionEmoji(int $perms, bool $isDir = false): string
+    {
+        if ($isDir) {
+            return match($perms) {
+                0755 => '📁',  // Directory access
+                0700 => '🏠',  // Private directory
+                0777 => '🚨',  // Dangerous!
+                0555 => '🔍',  // Read-only directory
+                0000 => '🚫',  // No access
+                default => '📂'  // Generic folder for uncommon perms
+            };
+        } else {
+            return match($perms) {
+                0755 => '🔓',  // Executable file
+                0644 => '📖',  // Standard file
+                0600 => '🔒',  // Private file
+                0777 => '🚨',  // Dangerous!
+                0700 => '🏠',  // Owner only
+                0666 => '📝',  // World writable file
+                0555 => '🔍',  // Read/execute
+                0444 => '👁️',  // Read-only
+                0000 => '🚫',  // No permissions
+                default => '⚙️'  // Generic gear for uncommon perms
+            };
+        }
+    }
+    
+    private function formatPermissionString(int $perms): string
+    {
         $info = '';
 
         // Owner
