@@ -33,7 +33,7 @@ jobs:
         run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
       
       - name: 💾 Cache composer dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
           key: ${{ runner.os }}-php-${{ matrix.php-version }}-composer-${{ hashFiles('**/composer.lock') }}
@@ -50,7 +50,7 @@ jobs:
       
       - name: 📝 Upload Quality Report (if failed)
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: quality-report-php-${{ matrix.php-version }}
           path: |
@@ -88,7 +88,7 @@ jobs:
       
       - name: 📤 Upload Pint report
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: pint-report
           path: pint-report.json
@@ -143,7 +143,7 @@ jobs:
       
       - name: 📊 Upload test results
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: test-results-php-${{ matrix.php-version }}
           path: tests/_output/
