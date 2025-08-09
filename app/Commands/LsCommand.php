@@ -254,12 +254,20 @@ class LsCommand extends ConduitCommand
 
     private function getGitStatus(string $path): ?string
     {
-        if (!is_dir('.git') && !exec('git rev-parse --git-dir 2>/dev/null')) {
-            return null;
+        if (!is_dir('.git')) {
+            // Use Process class for safer execution
+            $process = new \Symfony\Component\Process\Process(['git', 'rev-parse', '--git-dir']);
+            $process->run();
+            if (!$process->isSuccessful()) {
+                return null;
+            }
         }
 
         $relativePath = str_replace(getcwd() . '/', '', $path);
-        $status = trim(shell_exec('git status --porcelain ' . escapeshellarg($relativePath) . ' 2>/dev/null') ?? '');
+        // Use Process class for safer git status execution
+        $process = new \Symfony\Component\Process\Process(['git', 'status', '--porcelain', $relativePath]);
+        $process->run();
+        $status = $process->isSuccessful() ? trim($process->getOutput()) : '';
         
         if (empty($status)) return '✅';
         
@@ -530,7 +538,10 @@ class LsCommand extends ConduitCommand
     {
         $editor = getenv('EDITOR') ?: 'nano';
         $this->smartInfo("✏️ Opening {$filePath} with {$editor}");
-        system($editor . ' ' . escapeshellarg($filePath));
+        // Use Process class for safer editor execution
+        $process = new \Symfony\Component\Process\Process([$editor, $filePath]);
+        $process->setTty(true);
+        $process->run();
     }
 
     private function showFileInfo(string $filePath): void

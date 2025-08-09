@@ -3,3 +3,8 @@
 /.vscode
 /.vagrant
 .phpunit.result.cache
+/database/database.sqlite
+
+# THE SHIT components (installed via ./💩 install)
+/💩-components/*
+!/💩-components/.gitkeep

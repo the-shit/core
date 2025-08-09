@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(tree:*)",
+      "Bash(composer show:*)",
+      "Bash(mkdir:*)",
+      "Bash(rm:*)",
+      "Bash(composer create-project:*)",
+      "Bash(php:*)",
+      "Bash(conduit knowledge:search:*)",
+      "Bash(conduit:*)",
+      "Bash(composer:*)"
+    ],
+    "deny": []
+  }
+}

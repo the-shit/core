@@ -1,0 +1,72 @@
+{
+  "name": "S.H.I.T.",
+  "philosophy": "Scaling Humans Into Tomorrow", 
+  "version": "3.1.0",
+  "edition": "Spotify's Here, It's Tight",
+  "description": "Streamlined Human Interface Tools for modern development",
+  "type": "project",
+  "license": "MIT",
+  
+  "require": {
+    "php": "^8.2",
+    "laravel-zero/framework": "^12.0"
+  },
+  
+  "require-shit": {
+    "shit/spotify": "^1.0",
+    "shit/github": "dev-main",
+    "shit/docker": "@dev"
+  },
+  
+  "repositories": [
+    {
+      "type": "git",
+      "url": "https://github.com/jordanpartridge/shit-spotify.git",
+      "name": "shit/spotify"
+    },
+    {
+      "type": "git", 
+      "url": "https://github.com/jordanpartridge/shit-github.git",
+      "name": "shit/github"
+    },
+    {
+      "type": "git",
+      "url": "https://github.com/jordanpartridge/shit-docker.git", 
+      "name": "shit/docker"
+    }
+  ],
+  
+  "scripts": {
+    "post-install-cmd": [
+      "./💩 system:sync-components --silent"
+    ],
+    "pre-commit": [
+      "./💩 system:cleanup --components"
+    ],
+    "test": [
+      "./💩 test"
+    ]
+  },
+  
+  "extra": {
+    "shit": {
+      "tagline": "If it's not tight, it's not right",
+      "edition-history": {
+        "3.0.0": "Streamlined Human Interface Tools",
+        "3.1.0": "Spotify's Here, It's Tight",
+        "3.2.0": "Security Handling Is Tight"
+      },
+      "minimum-tightness": "8.5",
+      "auto-install": true,
+      "component-dir": "shit-components"
+    }
+  },
+  
+  "config": {
+    "preferred-install": "source",
+    "sort-packages": true,
+    "allow-plugins": {
+      "shit/installer": true
+    }
+  }
+}

@@ -1,0 +1,59 @@
+# THE SHIT Ignore File
+# Stuff that's not tight enough for THE SHIT
+
+# Temporary shit
+*.tmp
+*.temp
+*.cache
+.DS_Store
+
+# Broken shit
+*.broken
+*.fixme
+*.todo
+
+# Old shit
+*.old
+*.backup
+*.deprecated
+
+# Experimental shit (not tight yet)
+/experimental/
+/alpha/
+/untested/
+
+# Other people's shit
+/node_modules/
+/vendor/
+
+# Loose shit (tighten before commit)
+*.loose
+*.draft
+*.wip
+
+# Bad shit (never commit)
+*.credentials
+*.secret
+.env.local
+.env.*.local
+
+# Test shit
+/coverage/
+*.test.skip
+
+# Build shit (regenerated)
+/dist/
+/build/
+/💩.phar
+
+# Your personal shit
+/.vscode/
+/.idea/
+*.swp
+*.swo
+
+# THE SHIT components are managed separately
+/💩-components/*
+!/💩-components/.gitkeep
+
+# Remember: If it's not tight, it's not right!

@@ -178,9 +178,10 @@ class ComponentConfigCommand extends ConduitCommand
 
     private function getGitConfig(string $key): ?string
     {
-        $command = "git config --global {$key} 2>/dev/null";
-        $output = shell_exec($command);
-        return $output ? trim($output) : null;
+        // Use Process class for safer git config execution
+        $process = new \Symfony\Component\Process\Process(['git', 'config', '--global', $key]);
+        $process->run();
+        return $process->isSuccessful() ? trim($process->getOutput()) : null;
     }
 
     private function saveConfig(array $settings): void
