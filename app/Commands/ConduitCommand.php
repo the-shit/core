@@ -10,9 +10,9 @@ use function Laravel\Prompts\text;
 
 /**
  * Base command for Human-AI collaboration pattern
- * 
+ *
  * This architecture enables seamless interaction between:
- * - Jordan (Human) → Beautiful interactive prompts  
+ * - Jordan (Human) → Beautiful interactive prompts
  * - Claude (AI) → JSON output and non-interactive defaults
  * - CI/CD → Automated execution with environment variables
  */
@@ -39,6 +39,7 @@ abstract class ConduitCommand extends Command
         } catch (NonInteractiveValidationException $e) {
             // Graceful fallback to non-interactive if prompts fail
             $this->warn('Falling back to non-interactive mode due to prompt failure');
+
             return $this->executeNonInteractive();
         }
     }
@@ -58,7 +59,7 @@ abstract class ConduitCommand extends Command
      */
     protected function isNonInteractiveMode(): bool
     {
-        return !$this->input->isInteractive() ||
+        return ! $this->input->isInteractive() ||
                in_array('--no-interaction', $GLOBALS['argv'] ?? []) ||
                in_array('-n', $GLOBALS['argv'] ?? []) ||
                $this->getUserAgent() !== 'human';
@@ -69,9 +70,8 @@ abstract class ConduitCommand extends Command
      */
     protected function getUserAgent(): string
     {
-        return $_SERVER['CONDUIT_USER_AGENT'] ?? 
-               env('CONDUIT_USER_AGENT') ?? 
-               'human';
+        return $_SERVER['CONDUIT_USER_AGENT'] ??
+               config('conduit.user_agent', 'human');
     }
 
     /**
@@ -83,13 +83,14 @@ abstract class ConduitCommand extends Command
         mixed $default = '',
         bool $required = false,
         string $hint = '',
-        callable $validate = null
+        ?callable $validate = null
     ): string {
         // In non-interactive mode, return default immediately
         if ($this->isNonInteractiveMode()) {
             if (empty($default) && $required) {
                 throw new \RuntimeException("Non-interactive mode requires a default value for: {$label}");
             }
+
             return (string) $default;
         }
 
@@ -136,14 +137,15 @@ abstract class ConduitCommand extends Command
      */
     protected function smartOutput(array $data, string $humanMessage = ''): void
     {
-        if ($this->option('json') || $this->getUserAgent() !== 'human') {
+        $jsonMode = (bool) $this->option('json');
+        if ($jsonMode || $this->getUserAgent() !== 'human') {
             $this->line(json_encode($data, JSON_PRETTY_PRINT));
         } else {
             if ($humanMessage) {
                 $this->info($humanMessage);
             }
             foreach ($data as $key => $value) {
-                $this->line("   " . ucwords(str_replace('_', ' ', $key)) . ": {$value}");
+                $this->line('   '.ucwords(str_replace('_', ' ', $key)).": {$value}");
             }
         }
     }
@@ -153,7 +155,7 @@ abstract class ConduitCommand extends Command
      */
     protected function smartInfo(string $message): void
     {
-        if (!$this->isNonInteractiveMode()) {
+        if (! $this->isNonInteractiveMode()) {
             $this->info($message);
         }
     }
@@ -163,7 +165,7 @@ abstract class ConduitCommand extends Command
      */
     protected function smartLine(string $message, bool $force = false): void
     {
-        if (!$this->isNonInteractiveMode() || $force) {
+        if (! $this->isNonInteractiveMode() || $force) {
             $this->line($message);
         }
     }
@@ -173,7 +175,7 @@ abstract class ConduitCommand extends Command
      */
     protected function smartNewLine(): void
     {
-        if (!$this->isNonInteractiveMode()) {
+        if (! $this->isNonInteractiveMode()) {
             $this->newLine();
         }
     }
@@ -183,7 +185,7 @@ abstract class ConduitCommand extends Command
      */
     protected function forceOutput(string $message, string $type = 'line'): void
     {
-        match($type) {
+        match ($type) {
             'info' => $this->info($message),
             'error' => $this->error($message),
             'warn' => $this->warn($message),
@@ -196,13 +198,14 @@ abstract class ConduitCommand extends Command
      */
     protected function jsonResponse(array $data, int $status = self::SUCCESS): int
     {
-        if ($this->isNonInteractiveMode() || $this->option('json')) {
+        if ($this->isNonInteractiveMode() || (bool) $this->option('json')) {
             $response = [
                 'status' => $status === self::SUCCESS ? 'success' : 'error',
-                'data' => $data
+                'data' => $data,
             ];
             $this->line(json_encode($response, JSON_PRETTY_PRINT));
         }
+
         return $status;
     }
 }

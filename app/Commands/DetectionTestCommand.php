@@ -20,8 +20,8 @@ class DetectionTestCommand extends ConduitCommand
             'argv' => $GLOBALS['argv'] ?? [],
             'environment_vars' => [
                 'CONDUIT_USER_AGENT' => $_SERVER['CONDUIT_USER_AGENT'] ?? null,
-                'env_CONDUIT_USER_AGENT' => env('CONDUIT_USER_AGENT') ?? null,
-            ]
+                'config_CONDUIT_USER_AGENT' => config('conduit.user_agent'),
+            ],
         ];
 
         if ($this->isNonInteractiveMode()) {
@@ -29,16 +29,16 @@ class DetectionTestCommand extends ConduitCommand
         } else {
             $this->info('🔍 Smart Detection Debug Results:');
             $this->newLine();
-            
+
             foreach ($detectionResults as $key => $value) {
                 if ($key === 'argv' || $key === 'environment_vars') {
-                    $this->line("   {$key}: " . json_encode($value));
+                    $this->line("   {$key}: ".json_encode($value));
                 } else {
                     $status = is_bool($value) ? ($value ? '✅ TRUE' : '❌ FALSE') : $value;
                     $this->line("   {$key}: {$status}");
                 }
             }
-            
+
             $this->newLine();
             $this->line('💡 Detection Logic:');
             $this->line('   Non-interactive if ANY of these are true:');
@@ -46,7 +46,7 @@ class DetectionTestCommand extends ConduitCommand
             $this->line('   • --no-interaction flag in argv');
             $this->line('   • -n flag in argv');
             $this->line('   • user_agent !== "human"');
-            
+
             return self::SUCCESS;
         }
     }

@@ -28,8 +28,9 @@ class TestHumanAiCommand extends ConduitCommand
             default: true
         );
 
-        if (!$shouldContinue) {
+        if (! $shouldContinue) {
             $this->smartInfo('Operation cancelled.');
+
             return self::SUCCESS;
         }
 
@@ -39,7 +40,7 @@ class TestHumanAiCommand extends ConduitCommand
             'mode' => $this->isNonInteractiveMode() ? 'ai-agent' : 'human-interactive',
             'user_agent' => $this->getUserAgent(),
             'timestamp' => now()->toISOString(),
-            'pattern_works' => true
+            'pattern_works' => true,
         ];
 
         if ($this->isNonInteractiveMode()) {
@@ -48,6 +49,7 @@ class TestHumanAiCommand extends ConduitCommand
             $this->smartOutput($result, '✅ Human-AI collaboration pattern works!');
             $this->smartNewLine();
             $this->smartLine('🎉 This proves the architecture is sound!');
+
             return self::SUCCESS;
         }
     }
@@ -60,7 +62,7 @@ class TestHumanAiCommand extends ConduitCommand
             'user_agent' => $this->getUserAgent(),
             'message' => 'AI agent executed specialized non-interactive logic',
             'defaults_used' => true,
-            'timestamp' => now()->toISOString()
+            'timestamp' => now()->toISOString(),
         ];
 
         return $this->jsonResponse($result);

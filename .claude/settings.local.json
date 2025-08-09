@@ -10,7 +10,8 @@
       "Bash(php:*)",
       "Bash(conduit knowledge:search:*)",
       "Bash(conduit:*)",
-      "Bash(composer:*)"
+      "Bash(composer:*)",
+      "Bash(./vendor/bin/phpstan analyse:*)"
     ],
     "deny": []
   }

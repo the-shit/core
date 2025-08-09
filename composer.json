@@ -17,10 +17,11 @@
     ],
     "require": {
         "php": "^8.2",
-        "laravel-zero/framework": "^12.0",
-        "jordanpartridge/conduit-interfaces": "^1.0"
+        "jordanpartridge/github-client": "^2.9",
+        "laravel-zero/framework": "^12.0"
     },
     "require-dev": {
+        "larastan/larastan": "^3.6",
         "laravel/pint": "^1.22",
         "mockery/mockery": "^1.6.12",
         "pestphp/pest": "^3.8.2"
@@ -44,6 +45,22 @@
         "allow-plugins": {
             "pestphp/pest-plugin": true
         }
+    },
+    "scripts": {
+        "quality": [
+            "@pint",
+            "@stan",
+            "@test"
+        ],
+        "pint": "./vendor/bin/pint",
+        "pint:test": "./vendor/bin/pint --test",
+        "stan": "./vendor/bin/phpstan analyse --memory-limit=512M",
+        "test": "./vendor/bin/pest",
+        "check": [
+            "@pint:test",
+            "@stan",
+            "@test"
+        ]
     },
     "minimum-stability": "stable",
     "prefer-stable": true,
