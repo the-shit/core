@@ -2,11 +2,15 @@
 
 namespace App\Commands;
 
-use Symfony\Component\Process\Process;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
+
+use function Laravel\Prompts\warning;
 
 class ComponentInstallCommand extends ConduitCommand
 {
-    protected $signature = 'install {component : Component name (e.g., spotify, github)} {version? : Version constraint (e.g., ^1.0, ~2.1, 1.2.3)}';
+    protected $signature = 'install {component : Component name (e.g., spotify, github)} {version? : Version constraint (e.g., ^1.0, ~2.1, 1.2.3)} {--json : Output as JSON}';
+
     protected $description = 'Install a component from THE SHIT ecosystem';
 
     protected function executeCommand(): int
@@ -14,69 +18,82 @@ class ComponentInstallCommand extends ConduitCommand
         $component = $this->argument('component');
         $version = $this->argument('version') ?? '*';
         $componentsDir = base_path('💩-components');
-        $componentPath = $componentsDir . '/' . $component;
+        $componentPath = $componentsDir.'/'.$component;
 
         // Check if already installed
         if (is_dir($componentPath)) {
             $this->smartInfo("✅ Component '{$component}' is already installed");
+
             return self::SUCCESS;
         }
 
         $this->smartInfo("💩 Installing {$component}...");
 
         // Create components directory if needed
-        if (!is_dir($componentsDir)) {
+        if (! is_dir($componentsDir)) {
             mkdir($componentsDir, 0755, true);
         }
 
         // Determine the GitHub repo
         $repo = "S-H-I-T/{$component}";
-        
+
         try {
             // Get releases from GitHub
             $releases = $this->getGitHubReleases($repo);
-            
+
             if (empty($releases)) {
                 // No releases, try to clone from main branch
-                $this->smartInfo("📦 No releases found, installing from main branch...");
+                $this->smartInfo('📦 No releases found, installing from main branch...');
+
                 return $this->cloneFromGitHub($repo, $componentPath, 'main');
             }
 
             // Find matching version
             $release = $this->findMatchingRelease($releases, $version);
-            
-            if (!$release) {
+
+            if (! $release) {
                 $this->forceOutput("❌ No release matching version constraint '{$version}'", 'error');
+
                 return self::FAILURE;
             }
 
             $this->smartInfo("📦 Installing {$component} v{$release['tag_name']}...");
-            
+
             // Clone specific tag
             return $this->cloneFromGitHub($repo, $componentPath, $release['tag_name']);
-            
+
         } catch (\Exception $e) {
-            $this->forceOutput("❌ Failed to install: " . $e->getMessage(), 'error');
+            $this->forceOutput('❌ Failed to install: '.$e->getMessage(), 'error');
+
             return self::FAILURE;
         }
     }
 
     private function getGitHubReleases(string $repo): array
     {
-        $response = Http::withHeaders([
-            'Accept' => 'application/vnd.github.v3+json',
-            'User-Agent' => 'THE-SHIT-CLI'
-        ])->get("https://api.github.com/repos/{$repo}/releases");
+        try {
+            // Use HTTP directly for unauthenticated requests
+            $response = Http::withHeaders([
+                'Accept' => 'application/vnd.github.v3+json',
+                'User-Agent' => 'THE-SHIT-CLI',
+            ])->get("https://api.github.com/repos/{$repo}/releases");
 
-        if ($response->failed()) {
-            if ($response->status() === 404) {
-                // Repo might not exist or have releases
+            if ($response->failed()) {
+                if ($response->status() === 404) {
+                    // Repo might not exist or have releases
+                    return [];
+                }
+                throw new \Exception('GitHub API error: '.$response->body());
+            }
+
+            return $response->json();
+        } catch (\Exception $e) {
+            // Check if it's a 404 (repo doesn't exist or no releases)
+            if (str_contains($e->getMessage(), '404')) {
                 return [];
             }
-            throw new \Exception("GitHub API error: " . $response->body());
+            throw new \Exception('GitHub API error: '.$e->getMessage());
         }
-
-        return $response->json();
     }
 
     private function findMatchingRelease(array $releases, string $constraint): ?array
@@ -89,17 +106,17 @@ class ComponentInstallCommand extends ConduitCommand
         // TODO: Implement full semver constraint matching
         foreach ($releases as $release) {
             $tag = ltrim($release['tag_name'], 'v');
-            
+
             // Exact match
             if ($tag === ltrim($constraint, 'v^~')) {
                 return $release;
             }
-            
+
             // Simple caret (^) matching - same major version
             if (str_starts_with($constraint, '^')) {
                 $constraintVersion = ltrim($constraint, '^');
                 $major = explode('.', $constraintVersion)[0];
-                if (str_starts_with($tag, $major . '.')) {
+                if (str_starts_with($tag, $major.'.')) {
                     return $release;
                 }
             }
@@ -116,15 +133,15 @@ class ComponentInstallCommand extends ConduitCommand
             '--depth', '1',
             '--branch', $ref,
             "https://github.com/{$repo}.git",
-            $path
+            $path,
         ];
 
-        $process = new Process($cloneCommand);
-        $process->setTimeout(300);
-        $process->run();
+        $result = Process::timeout(300)
+            ->run(implode(' ', array_map('escapeshellarg', $cloneCommand)));
 
-        if (!$process->isSuccessful()) {
-            $this->forceOutput("❌ Failed to clone repository: " . $process->getErrorOutput(), 'error');
+        if (! $result->successful()) {
+            $this->forceOutput('❌ Failed to clone repository: '.$result->errorOutput(), 'error');
+
             return self::FAILURE;
         }
 
@@ -132,35 +149,34 @@ class ComponentInstallCommand extends ConduitCommand
         $this->exec("rm -rf {$path}/.git");
 
         // Install dependencies if composer.json exists
-        if (file_exists($path . '/composer.json')) {
-            $this->smartInfo("📚 Installing dependencies...");
-            $installProcess = new Process(['composer', 'install', '--no-dev'], $path);
-            $installProcess->setTimeout(300);
-            $installProcess->run();
-            
-            if (!$installProcess->isSuccessful()) {
-                $this->smartWarn("⚠️  Warning: Failed to install dependencies");
+        if (file_exists($path.'/composer.json')) {
+            $this->smartInfo('📚 Installing dependencies...');
+            $result = Process::path($path)
+                ->timeout(300)
+                ->run('composer install --no-dev');
+
+            if (! $result->successful()) {
+                warning('Failed to install dependencies');
             }
         }
 
         // Make executable if exists
-        $manifest = json_decode(file_get_contents($path . '/💩.json'), true);
+        $manifest = json_decode(file_get_contents($path.'/💩.json'), true);
         if (isset($manifest['executable'])) {
-            $executable = $path . '/bin/' . $manifest['executable'];
+            $executable = $path.'/bin/'.$manifest['executable'];
             if (file_exists($executable)) {
                 chmod($executable, 0755);
             }
         }
 
         $this->smartInfo("✅ Successfully installed {$repo}@{$ref}");
-        $this->smartInfo("🚀 Component ready to use!");
-        
+        $this->smartInfo('🚀 Component ready to use!');
+
         return self::SUCCESS;
     }
 
     private function exec(string $command): void
     {
-        $process = Process::fromShellCommandline($command);
-        $process->run();
+        Process::run($command);
     }
 }

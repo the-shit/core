@@ -2,13 +2,14 @@
 
 namespace App\Commands;
 
-use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Process;
 
-use function Laravel\Prompts\table;
-use function Laravel\Prompts\select;
-use function Laravel\Prompts\search;
 use function Laravel\Prompts\confirm;
+use function Laravel\Prompts\search;
+use function Laravel\Prompts\select;
+use function Laravel\Prompts\table;
 use function Laravel\Prompts\text;
 
 class LsCommand extends ConduitCommand
@@ -23,16 +24,17 @@ class LsCommand extends ConduitCommand
         if ($this->option('guide')) {
             return $this->showSexyHelp();
         }
-        
+
         $path = $this->argument('path') ?? getcwd();
-        
-        if (!is_dir($path)) {
+
+        if (! is_dir($path)) {
             $this->forceOutput("💩 Path doesn't exist: {$path}", 'error');
+
             return self::FAILURE;
         }
 
         $files = $this->scanDirectory($path);
-        
+
         if ($this->option('recent')) {
             $files = collect($files)->sortByDesc('modified')->values()->all();
         } elseif ($this->option('large')) {
@@ -49,15 +51,15 @@ class LsCommand extends ConduitCommand
 
         return $this->displayInteractive($files, $path);
     }
-    
+
     private function showSexyHelp(): int
     {
         $this->smartInfo("💩 SHIT ls - The file lister that doesn't lie to you");
         $this->smartNewLine();
-        
-        $this->smartLine("Usage: ./💩 ls [path] [options]");
+
+        $this->smartLine('Usage: ./💩 ls [path] [options]');
         $this->smartNewLine();
-        
+
         table(
             ['🚩 Flag', '📝 Description', '💡 Example'],
             [
@@ -71,10 +73,10 @@ class LsCommand extends ConduitCommand
                 ['--guide', 'Show this sexy options guide', './💩 ls --guide'],
             ]
         );
-        
+
         $this->smartNewLine();
-        $this->smartLine("🎭 Permission Emojis:");
-        
+        $this->smartLine('🎭 Permission Emojis:');
+
         table(
             ['🎨 Emoji', '📊 Octal', '📝 Description'],
             [
@@ -90,31 +92,33 @@ class LsCommand extends ConduitCommand
                 ['🚫', '000', 'No permissions'],
             ]
         );
-        
+
         $this->smartNewLine();
         $this->smartLine("💩 Finally, a file lister that doesn't pretend to be enterprise-grade.");
-        
+
         return self::SUCCESS;
     }
 
     private function scanDirectory(string $path): array
     {
         $files = [];
-        
+
         try {
             $items = scandir($path);
-            
+
             foreach ($items as $item) {
-                if ($item === '.' || $item === '..') continue;
-                
-                $fullPath = $path . DIRECTORY_SEPARATOR . $item;
+                if ($item === '.' || $item === '..') {
+                    continue;
+                }
+
+                $fullPath = $path.DIRECTORY_SEPARATOR.$item;
                 $stat = stat($fullPath);
-                
+
                 if ($stat === false) {
                     // Skip files we can't stat
                     continue;
                 }
-                
+
                 $files[] = [
                     'name' => $item,
                     'type' => is_dir($fullPath) ? 'directory' : 'file',
@@ -126,9 +130,9 @@ class LsCommand extends ConduitCommand
                 ];
             }
         } catch (\Exception $e) {
-            $this->forceOutput("💩 Error reading directory: " . $e->getMessage(), 'error');
+            $this->forceOutput('💩 Error reading directory: '.$e->getMessage(), 'error');
         }
-        
+
         return $files;
     }
 
@@ -136,16 +140,25 @@ class LsCommand extends ConduitCommand
     {
         if (is_dir($path)) {
             // Special directories
-            if (basename($path) === '.git') return '🔧';
-            if (basename($path) === 'vendor') return '📦';
-            if (basename($path) === 'node_modules') return '📦';
-            if (basename($path) === 'tests') return '🧪';
+            if (basename($path) === '.git') {
+                return '🔧';
+            }
+            if (basename($path) === 'vendor') {
+                return '📦';
+            }
+            if (basename($path) === 'node_modules') {
+                return '📦';
+            }
+            if (basename($path) === 'tests') {
+                return '🧪';
+            }
+
             return '📁';
         }
 
         $extension = strtolower(pathinfo($path, PATHINFO_EXTENSION));
-        
-        return match($extension) {
+
+        return match ($extension) {
             'php' => '🐘',
             'js', 'ts' => '💛',
             'json' => '📋',
@@ -169,26 +182,26 @@ class LsCommand extends ConduitCommand
         $perms = fileperms($path) & 0777;
         $permString = $this->formatPermissionString($perms);
         $isDir = is_dir($path);
-        
+
         // Choose format based on flags
         if ($this->option('detailed-perms')) {
-            return $this->getPermissionEmoji($perms, $isDir) . ' ' . $permString;
+            return $this->getPermissionEmoji($perms, $isDir).' '.$permString;
         } elseif ($this->option('octal')) {
-            return $this->getPermissionEmoji($perms, $isDir) . ' ' . sprintf('%03o', $perms);
+            return $this->getPermissionEmoji($perms, $isDir).' '.sprintf('%03o', $perms);
         }
-        
+
         // Default: emoji + description (different for dirs vs files)
         if ($isDir) {
-            return match($perms) {
+            return match ($perms) {
                 0755 => '📁 Dir Access',     // rwxr-xr-x
                 0700 => '🏠 Private Dir',    // rwx------
                 0777 => '🚨 World Write!',   // rwxrwxrwx (dangerous!)
                 0555 => '🔍 Read Only',      // r-xr-xr-x
                 0000 => '🚫 No Access',      // ---------
-                default => $this->getPermissionEmoji($perms, $isDir) . ' ' . sprintf('%03o', $perms)
+                default => $this->getPermissionEmoji($perms, $isDir).' '.sprintf('%03o', $perms)
             };
         } else {
-            return match($perms) {
+            return match ($perms) {
                 0755 => '🔓 Executable',     // rwxr-xr-x
                 0644 => '📖 Standard',       // rw-r--r--
                 0600 => '🔒 Private',        // rw-------
@@ -198,15 +211,15 @@ class LsCommand extends ConduitCommand
                 0555 => '🔍 Read/Run',       // r-xr-xr-x
                 0444 => '👁️ Read Only',      // r--r--r--
                 0000 => '🚫 No Access',      // ---------
-                default => $this->getPermissionEmoji($perms, $isDir) . ' ' . sprintf('%03o', $perms)
+                default => $this->getPermissionEmoji($perms, $isDir).' '.sprintf('%03o', $perms)
             };
         }
     }
-    
+
     private function getPermissionEmoji(int $perms, bool $isDir = false): string
     {
         if ($isDir) {
-            return match($perms) {
+            return match ($perms) {
                 0755 => '📁',  // Directory access
                 0700 => '🏠',  // Private directory
                 0777 => '🚨',  // Dangerous!
@@ -215,7 +228,7 @@ class LsCommand extends ConduitCommand
                 default => '📂'  // Generic folder for uncommon perms
             };
         } else {
-            return match($perms) {
+            return match ($perms) {
                 0755 => '🔓',  // Executable file
                 0644 => '📖',  // Standard file
                 0600 => '🔒',  // Private file
@@ -229,7 +242,7 @@ class LsCommand extends ConduitCommand
             };
         }
     }
-    
+
     private function formatPermissionString(int $perms): string
     {
         $info = '';
@@ -254,24 +267,24 @@ class LsCommand extends ConduitCommand
 
     private function getGitStatus(string $path): ?string
     {
-        if (!is_dir('.git')) {
-            // Use Process class for safer execution
-            $process = new \Symfony\Component\Process\Process(['git', 'rev-parse', '--git-dir']);
-            $process->run();
-            if (!$process->isSuccessful()) {
+        if (! is_dir('.git')) {
+            // Use Laravel Process for safer execution
+            $result = Process::run('git rev-parse --git-dir');
+            if (! $result->successful()) {
                 return null;
             }
         }
 
-        $relativePath = str_replace(getcwd() . '/', '', $path);
-        // Use Process class for safer git status execution
-        $process = new \Symfony\Component\Process\Process(['git', 'status', '--porcelain', $relativePath]);
-        $process->run();
-        $status = $process->isSuccessful() ? trim($process->getOutput()) : '';
-        
-        if (empty($status)) return '✅';
-        
-        return match(substr($status, 0, 2)) {
+        $relativePath = str_replace(getcwd().'/', '', $path);
+        // Use Laravel Process for safer git status execution
+        $result = Process::run('git status --porcelain '.escapeshellarg($relativePath));
+        $status = $result->successful() ? trim($result->output()) : '';
+
+        if (empty($status)) {
+            return '✅';
+        }
+
+        return match (substr($status, 0, 2)) {
             '??' => '❓',
             'A ' => '➕',
             'M ' => '📝',
@@ -283,16 +296,17 @@ class LsCommand extends ConduitCommand
         };
     }
 
-
     private function formatSize(int $bytes): string
     {
-        if ($bytes === 0) return '0 B';
-        
+        if ($bytes === 0) {
+            return '0 B';
+        }
+
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
         $factor = floor(log($bytes, 1024));
         $factor = min($factor, count($units) - 1);
-        
-        return sprintf("%.1f %s", $bytes / pow(1024, $factor), $units[$factor]);
+
+        return sprintf('%.1f %s', $bytes / pow(1024, $factor), $units[$factor]);
     }
 
     private function displayInteractive(array $files, string $path): int
@@ -302,6 +316,7 @@ class LsCommand extends ConduitCommand
 
         if (empty($files)) {
             $this->smartLine('Empty directory (how sad)');
+
             return self::SUCCESS;
         }
 
@@ -310,18 +325,18 @@ class LsCommand extends ConduitCommand
         foreach ($files as $file) {
             $sizeStr = $file['type'] === 'directory' ? '-' : $this->formatSize($file['size']);
             $modifiedStr = $file['modified']->diffForHumans();
-            $nameWithIcon = $file['icon'] . ' ' . $file['name'];
-            
+            $nameWithIcon = $file['icon'].' '.$file['name'];
+
             // Add git status if enabled
             if ($this->option('git') && $file['git_status']) {
-                $nameWithIcon .= ' ' . $file['git_status'];
+                $nameWithIcon .= ' '.$file['git_status'];
             }
 
             $rows[] = [
                 substr($nameWithIcon, 0, 30),
                 $sizeStr,
                 substr($modifiedStr, 0, 15),
-                $file['permissions']
+                $file['permissions'],
             ];
         }
 
@@ -332,8 +347,8 @@ class LsCommand extends ConduitCommand
         );
 
         $this->smartNewLine();
-        $this->smartLine("💡 Tip: Use --json for machine-readable output");
-        $this->smartLine("💡 Tip: Use --recent, --large, or --git for different views");
+        $this->smartLine('💡 Tip: Use --json for machine-readable output');
+        $this->smartLine('💡 Tip: Use --recent, --large, or --git for different views');
 
         return self::SUCCESS;
     }
@@ -342,16 +357,17 @@ class LsCommand extends ConduitCommand
     {
         while (true) {
             $files = $this->scanDirectory($currentPath);
-            
+
             if (empty($files)) {
                 $this->smartLine("Empty directory: {$currentPath}");
                 $action = select(
                     '🚀 What would you like to do?',
                     ['Go up one level', 'Exit browser']
                 );
-                
+
                 if ($action === 'Go up one level') {
                     $currentPath = dirname($currentPath);
+
                     continue;
                 } else {
                     break;
@@ -360,29 +376,29 @@ class LsCommand extends ConduitCommand
 
             // Build options for selection
             $options = [];
-            
+
             // Add "Go up" option if not at root
             if ($currentPath !== '/') {
                 $options['..'] = '📁 .. (Go up one level)';
             }
-            
+
             // Add all files and directories
             foreach ($files as $file) {
-                $display = $file['icon'] . ' ' . $file['name'];
-                
+                $display = $file['icon'].' '.$file['name'];
+
                 if ($file['type'] === 'directory') {
                     $display .= '/';
                 } else {
-                    $display .= ' (' . $this->formatSize($file['size']) . ')';
+                    $display .= ' ('.$this->formatSize($file['size']).')';
                 }
-                
+
                 if ($this->option('git') && $file['git_status']) {
-                    $display .= ' ' . $file['git_status'];
+                    $display .= ' '.$file['git_status'];
                 }
-                
+
                 $options[$file['name']] = $display;
             }
-            
+
             // Add action options
             $options['__actions__'] = '⚡ Actions...';
             $options['__exit__'] = '🚪 Exit browser';
@@ -398,27 +414,30 @@ class LsCommand extends ConduitCommand
             if ($choice === '__exit__') {
                 break;
             }
-            
+
             if ($choice === '__actions__') {
                 $this->showFileActions($currentPath);
-                continue;
-            }
-            
-            if ($choice === '..') {
-                $currentPath = dirname($currentPath);
+
                 continue;
             }
 
-            $selectedPath = $currentPath . DIRECTORY_SEPARATOR . $choice;
-            
+            if ($choice === '..') {
+                $currentPath = dirname($currentPath);
+
+                continue;
+            }
+
+            $selectedPath = $currentPath.DIRECTORY_SEPARATOR.$choice;
+
             if (is_dir($selectedPath)) {
                 $currentPath = $selectedPath;
             } else {
                 $this->handleFileSelection($selectedPath);
             }
         }
-        
+
         $this->smartInfo('👋 Exited interactive browser');
+
         return self::SUCCESS;
     }
 
@@ -431,7 +450,7 @@ class LsCommand extends ConduitCommand
                 'create_file' => '📄 Create new file',
                 'create_dir' => '📁 Create new directory',
                 'show_path' => '📍 Show current path',
-                'back' => '⬅️ Back to browser'
+                'back' => '⬅️ Back to browser',
             ]
         );
 
@@ -439,12 +458,12 @@ class LsCommand extends ConduitCommand
             case 'refresh':
                 $this->smartInfo('🔄 Directory refreshed');
                 break;
-                
+
             case 'create_file':
                 $filename = text('📄 Enter filename:');
                 if ($filename) {
-                    $fullPath = $currentPath . DIRECTORY_SEPARATOR . $filename;
-                    if (!file_exists($fullPath)) {
+                    $fullPath = $currentPath.DIRECTORY_SEPARATOR.$filename;
+                    if (! file_exists($fullPath)) {
                         touch($fullPath);
                         $this->smartInfo("✅ Created file: {$filename}");
                     } else {
@@ -452,12 +471,12 @@ class LsCommand extends ConduitCommand
                     }
                 }
                 break;
-                
+
             case 'create_dir':
                 $dirname = text('📁 Enter directory name:');
                 if ($dirname) {
-                    $fullPath = $currentPath . DIRECTORY_SEPARATOR . $dirname;
-                    if (!is_dir($fullPath)) {
+                    $fullPath = $currentPath.DIRECTORY_SEPARATOR.$dirname;
+                    if (! is_dir($fullPath)) {
                         mkdir($fullPath, 0755, true);
                         $this->smartInfo("✅ Created directory: {$dirname}");
                     } else {
@@ -465,7 +484,7 @@ class LsCommand extends ConduitCommand
                     }
                 }
                 break;
-                
+
             case 'show_path':
                 $this->smartInfo("📍 Current path: {$currentPath}");
                 break;
@@ -476,7 +495,7 @@ class LsCommand extends ConduitCommand
     {
         $filename = basename($filePath);
         $filesize = $this->formatSize(filesize($filePath));
-        
+
         $action = select(
             "📄 {$filename} ({$filesize})",
             [
@@ -485,7 +504,7 @@ class LsCommand extends ConduitCommand
                 'copy_path' => '📋 Copy path to clipboard',
                 'delete' => '🗑️ Delete file',
                 'info' => 'ℹ️ Show file info',
-                'back' => '⬅️ Back to browser'
+                'back' => '⬅️ Back to browser',
             ]
         );
 
@@ -493,22 +512,22 @@ class LsCommand extends ConduitCommand
             case 'view':
                 $this->viewFile($filePath);
                 break;
-                
+
             case 'edit':
                 $this->editFile($filePath);
                 break;
-                
+
             case 'copy_path':
                 $this->smartInfo("📋 Path copied: {$filePath}");
                 break;
-                
+
             case 'delete':
                 if (confirm("🗑️ Are you sure you want to delete {$filename}?")) {
                     unlink($filePath);
                     $this->smartInfo("✅ Deleted: {$filename}");
                 }
                 break;
-                
+
             case 'info':
                 $this->showFileInfo($filePath);
                 break;
@@ -519,18 +538,18 @@ class LsCommand extends ConduitCommand
     {
         $content = file_get_contents($filePath);
         $lines = explode("\n", $content);
-        
-        $this->smartInfo("👁️ Viewing: " . basename($filePath));
+
+        $this->smartInfo('👁️ Viewing: '.basename($filePath));
         $this->smartLine(str_repeat('─', 50));
-        
+
         foreach (array_slice($lines, 0, 20) as $i => $line) {
             $this->smartLine(sprintf('%3d: %s', $i + 1, $line));
         }
-        
+
         if (count($lines) > 20) {
             $this->smartLine('... (truncated, showing first 20 lines)');
         }
-        
+
         $this->smartLine(str_repeat('─', 50));
     }
 
@@ -538,25 +557,24 @@ class LsCommand extends ConduitCommand
     {
         $editor = getenv('EDITOR') ?: 'nano';
         $this->smartInfo("✏️ Opening {$filePath} with {$editor}");
-        // Use Process class for safer editor execution
-        $process = new \Symfony\Component\Process\Process([$editor, $filePath]);
-        $process->setTty(true);
-        $process->run();
+        // Use Laravel Process for safer editor execution
+        Process::tty()
+            ->run(escapeshellcmd($editor).' '.escapeshellarg($filePath));
     }
 
     private function showFileInfo(string $filePath): void
     {
         $stat = stat($filePath);
         $filename = basename($filePath);
-        
+
         $this->smartInfo("ℹ️ File Information: {$filename}");
         $this->smartLine("📄 Path: {$filePath}");
-        $this->smartLine("📊 Size: " . $this->formatSize($stat['size']));
-        $this->smartLine("📅 Modified: " . Carbon::createFromTimestamp($stat['mtime'])->format('Y-m-d H:i:s'));
-        $this->smartLine("🔐 Permissions: " . $this->getPermissions($filePath));
-        
+        $this->smartLine('📊 Size: '.$this->formatSize($stat['size']));
+        $this->smartLine('📅 Modified: '.Carbon::createFromTimestamp($stat['mtime'])->format('Y-m-d H:i:s'));
+        $this->smartLine('🔐 Permissions: '.$this->getPermissions($filePath));
+
         if (is_link($filePath)) {
-            $this->smartLine("🔗 Symlink to: " . readlink($filePath));
+            $this->smartLine('🔗 Symlink to: '.readlink($filePath));
         }
     }
 }

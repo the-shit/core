@@ -60,6 +60,7 @@ class ComponentConfigCommand extends ConduitCommand
         // Smart confirm
         if (! $this->smartConfirm('Save these settings?', default: true)) {
             $this->smartInfo('Configuration cancelled.');
+
             return self::SUCCESS;
         }
 
@@ -78,6 +79,7 @@ class ComponentConfigCommand extends ConduitCommand
         } else {
             $this->smartOutput($config, '✅ Component configuration saved!');
             $this->smartLine('   Use "component:config" anytime to update these settings.');
+
             return self::SUCCESS;
         }
     }
@@ -87,6 +89,7 @@ class ComponentConfigCommand extends ConduitCommand
         // Check if already configured
         if ($this->hasValidConfig()) {
             $config = $this->loadConfig();
+
             return $this->jsonResponse($config);
         }
 
@@ -98,20 +101,23 @@ class ComponentConfigCommand extends ConduitCommand
         ];
 
         $this->saveConfig($config);
+
         return $this->jsonResponse($config);
     }
 
     private function hasValidConfig(): bool
     {
         $config = $this->loadConfig();
-        return !empty($config['github_username']) && 
-               !empty($config['php_namespace']) && 
-               !empty($config['author_email']);
+
+        return ! empty($config['github_username']) &&
+               ! empty($config['php_namespace']) &&
+               ! empty($config['author_email']);
     }
 
     private function loadConfig(): array
     {
         $configPath = $this->getConfigPath();
+
         return file_exists($configPath) ? json_decode(file_get_contents($configPath), true) : [];
     }
 
@@ -119,12 +125,12 @@ class ComponentConfigCommand extends ConduitCommand
     {
         // Try current config first
         $config = $this->loadConfig();
-        if (!empty($config['github_username'])) {
+        if (! empty($config['github_username'])) {
             return $config['github_username'];
         }
 
-        // Try environment variable
-        if ($username = env('CONDUIT_GITHUB_USERNAME')) {
+        // Try config (which checks environment)
+        if ($username = config('conduit.components.github_username')) {
             return $username;
         }
 
@@ -141,12 +147,12 @@ class ComponentConfigCommand extends ConduitCommand
     {
         // Try current config first
         $config = $this->loadConfig();
-        if (!empty($config['php_namespace'])) {
+        if (! empty($config['php_namespace'])) {
             return $config['php_namespace'];
         }
 
-        // Try environment variable
-        if ($namespace = env('CONDUIT_PHP_NAMESPACE')) {
+        // Try config (which checks environment)
+        if ($namespace = config('conduit.components.namespace')) {
             return $namespace;
         }
 
@@ -158,12 +164,12 @@ class ComponentConfigCommand extends ConduitCommand
     {
         // Try current config first
         $config = $this->loadConfig();
-        if (!empty($config['author_email'])) {
+        if (! empty($config['author_email'])) {
             return $config['author_email'];
         }
 
-        // Try environment variable
-        if ($email = env('CONDUIT_AUTHOR_EMAIL')) {
+        // Try config (which checks environment)
+        if ($email = config('conduit.components.author_email')) {
             return $email;
         }
 
@@ -181,6 +187,7 @@ class ComponentConfigCommand extends ConduitCommand
         // Use Process class for safer git config execution
         $process = new \Symfony\Component\Process\Process(['git', 'config', '--global', $key]);
         $process->run();
+
         return $process->isSuccessful() ? trim($process->getOutput()) : null;
     }
 
@@ -188,16 +195,16 @@ class ComponentConfigCommand extends ConduitCommand
     {
         $configPath = $this->getConfigPath();
         $dir = dirname($configPath);
-        
-        if (!is_dir($dir)) {
+
+        if (! is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        
+
         file_put_contents($configPath, json_encode($settings, JSON_PRETTY_PRINT));
     }
 
     private function getConfigPath(): string
     {
-        return $_SERVER['HOME'] . '/.config/conduit/component-config.json';
+        return $_SERVER['HOME'].'/.config/conduit/component-config.json';
     }
 }

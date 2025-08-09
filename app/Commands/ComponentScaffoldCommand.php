@@ -2,36 +2,39 @@
 
 namespace App\Commands;
 
-use Symfony\Component\Process\Process;
+use Illuminate\Support\Facades\Process;
 
 class ComponentScaffoldCommand extends ConduitCommand
 {
-    protected $signature = 'component:scaffold {name : Component name (e.g., spotify, github, docker)}';
+    protected $signature = 'component:scaffold {name : Component name (e.g., spotify, github, docker)} {--json : Output as JSON}';
+
     protected $description = 'Scaffold a new component using the conduit-component skeleton';
 
     protected function executeCommand(): int
     {
         $name = $this->argument('name');
         $componentsDir = base_path('💩-components');
-        $componentPath = $componentsDir . '/' . $name;
+        $componentPath = $componentsDir.'/'.$name;
         $skeletonPath = '/Users/jordanpartridge/packages/conduit-component';
 
         // Check if component already exists
         if (is_dir($componentPath)) {
             $this->forceOutput("❌ Component '{$name}' already exists at: {$componentPath}", 'error');
+
             return self::FAILURE;
         }
 
         // Create components directory if it doesn't exist
-        if (!is_dir($componentsDir)) {
+        if (! is_dir($componentsDir)) {
             mkdir($componentsDir, 0755, true);
         }
 
         // Copy skeleton to component directory
         $this->smartInfo("📦 Creating component '{$name}' from skeleton...");
-        
-        if (!$this->copyDirectory($skeletonPath, $componentPath)) {
-            $this->forceOutput("❌ Failed to copy skeleton directory", 'error');
+
+        if (! $this->copyDirectory($skeletonPath, $componentPath)) {
+            $this->forceOutput('❌ Failed to copy skeleton directory', 'error');
+
             return self::FAILURE;
         }
 
@@ -40,13 +43,13 @@ class ComponentScaffoldCommand extends ConduitCommand
         $description = $this->smartText('Component description', '', "Conduit {$name} integration", true);
         $authorName = $this->smartText('Author name', '', 'Jordan Partridge');
         $authorEmail = $this->smartText('Author email', '', 'jordan@partridge.rocks');
-        
+
         // Generate namespace
-        $namespace = 'ConduitComponents\\' . ucfirst($name);
-        
+        $namespace = 'ConduitComponents\\'.ucfirst($name);
+
         // Replace placeholders in files
-        $this->smartInfo("🔧 Customizing component files...");
-        
+        $this->smartInfo('🔧 Customizing component files...');
+
         $replacements = [
             '{{VENDOR}}' => $vendor,
             '{{PACKAGE_NAME}}' => "conduit-{$name}",
@@ -63,7 +66,7 @@ class ComponentScaffoldCommand extends ConduitCommand
         $this->createManifest($componentPath, $name, $description);
 
         // Install component dependencies
-        $this->smartInfo("📚 Installing component dependencies...");
+        $this->smartInfo('📚 Installing component dependencies...');
         $this->installDependencies($componentPath);
 
         // Create bin directory and executable
@@ -72,22 +75,22 @@ class ComponentScaffoldCommand extends ConduitCommand
         $this->smartInfo("✅ Component '{$name}' scaffolded successfully!");
         $this->smartNewLine();
         $this->smartInfo("📁 Location: {$componentPath}");
-        $this->smartInfo("🚀 Next steps:");
+        $this->smartInfo('🚀 Next steps:');
         $this->smartLine("   1. Add your business logic to src/{$name}Service.php");
-        $this->smartLine("   2. Define commands in src/Commands/");
+        $this->smartLine('   2. Define commands in src/Commands/');
         $this->smartLine("   3. Test with: php {$componentPath}/component <command>");
-        $this->smartLine("   4. Conduit will automatically discover the component");
+        $this->smartLine('   4. Conduit will automatically discover the component');
 
         return self::SUCCESS;
     }
 
     private function copyDirectory(string $source, string $destination): bool
     {
-        if (!is_dir($source)) {
+        if (! is_dir($source)) {
             return false;
         }
 
-        if (!is_dir($destination)) {
+        if (! is_dir($destination)) {
             mkdir($destination, 0755, true);
         }
 
@@ -97,10 +100,10 @@ class ComponentScaffoldCommand extends ConduitCommand
         );
 
         foreach ($iterator as $item) {
-            $target = $destination . DIRECTORY_SEPARATOR . $iterator->getSubPathName();
+            $target = $destination.DIRECTORY_SEPARATOR.$iterator->getSubPathName();
 
             if ($item->isDir()) {
-                if (!is_dir($target)) {
+                if (! is_dir($target)) {
                     mkdir($target, 0755, true);
                 }
             } else {
@@ -121,7 +124,7 @@ class ComponentScaffoldCommand extends ConduitCommand
             if ($file->isFile() && $this->shouldProcessFile($file->getPathname())) {
                 $content = file_get_contents($file->getPathname());
                 $newContent = str_replace(array_keys($replacements), array_values($replacements), $content);
-                
+
                 if ($content !== $newContent) {
                     file_put_contents($file->getPathname(), $newContent);
                 }
@@ -133,10 +136,10 @@ class ComponentScaffoldCommand extends ConduitCommand
     {
         $extension = pathinfo($filename, PATHINFO_EXTENSION);
         $excludeDirs = ['vendor', '.git', 'node_modules'];
-        
+
         // Skip binary files and vendor directories
         foreach ($excludeDirs as $dir) {
-            if (str_contains($filename, DIRECTORY_SEPARATOR . $dir . DIRECTORY_SEPARATOR)) {
+            if (str_contains($filename, DIRECTORY_SEPARATOR.$dir.DIRECTORY_SEPARATOR)) {
                 return false;
             }
         }
@@ -153,46 +156,45 @@ class ComponentScaffoldCommand extends ConduitCommand
             'executable' => $name,
             'commands' => [
                 "{$name}:example" => "Example {$name} command",
-                "{$name}:test" => "Test {$name} functionality"
-            ]
+                "{$name}:test" => "Test {$name} functionality",
+            ],
         ];
 
         file_put_contents(
-            $componentPath . '/💩.json',
+            $componentPath.'/💩.json',
             json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
         );
     }
 
     private function installDependencies(string $componentPath): void
     {
-        $process = new Process(['composer', 'install', '--no-dev'], $componentPath);
-        $process->setTimeout(300);
-        
         try {
-            $process->run();
+            Process::path($componentPath)
+                ->timeout(300)
+                ->run('composer install --no-dev');
         } catch (\Exception $e) {
-            $this->forceOutput("⚠️  Warning: Failed to install dependencies: " . $e->getMessage(), 'warn');
+            $this->forceOutput('⚠️  Warning: Failed to install dependencies: '.$e->getMessage(), 'warn');
         }
     }
 
     private function createExecutable(string $componentPath, string $name, string $namespace): void
     {
-        $binDir = $componentPath . '/bin';
-        if (!is_dir($binDir)) {
+        $binDir = $componentPath.'/bin';
+        if (! is_dir($binDir)) {
             mkdir($binDir, 0755, true);
         }
 
-        $executablePath = $binDir . '/' . $name;
+        $executablePath = $binDir.'/'.$name;
         $executableContent = $this->generateExecutable($name, $namespace);
-        
+
         file_put_contents($executablePath, $executableContent);
         chmod($executablePath, 0755);
     }
 
     private function generateExecutable(string $name, string $namespace): string
     {
-        $serviceClass = str_replace('\\', '\\\\', $namespace . '\\' . ucfirst($name) . 'Service');
-        
+        $serviceClass = str_replace('\\', '\\\\', $namespace.'\\'.ucfirst($name).'Service');
+
         return <<<PHP
 #!/usr/bin/env php
 <?php

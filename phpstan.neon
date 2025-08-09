@@ -1,0 +1,13 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - config
+    
+    level: 5
+    
+    excludePaths:
+        - 💩-components/*
+        - vendor/*

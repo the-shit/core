@@ -4,7 +4,6 @@ namespace App\Providers;
 
 use App\Commands\ConduitCommand;
 use Illuminate\Support\ServiceProvider;
-use Symfony\Component\Process\Process;
 
 class ComponentServiceProvider extends ServiceProvider
 {
@@ -21,12 +20,12 @@ class ComponentServiceProvider extends ServiceProvider
     private function discoverAndRegisterComponents(): void
     {
         $componentsPath = base_path('💩-components');
-        
-        if (!is_dir($componentsPath)) {
+
+        if (! is_dir($componentsPath)) {
             return;
         }
 
-        foreach (glob($componentsPath . '/*/💩.json') as $manifestPath) {
+        foreach (glob($componentsPath.'/*/💩.json') as $manifestPath) {
             $this->registerComponent(dirname($manifestPath));
         }
     }
@@ -34,16 +33,16 @@ class ComponentServiceProvider extends ServiceProvider
     private function registerComponent(string $componentPath): void
     {
         try {
-            $config = json_decode(file_get_contents($componentPath . '/💩.json'), true);
-            
-            if (!isset($config['commands'])) {
+            $config = json_decode(file_get_contents($componentPath.'/💩.json'), true);
+
+            if (! isset($config['commands'])) {
                 return;
             }
 
             // Get the executable path
             $executable = $this->getComponentExecutable($componentPath, $config);
-            
-            if (!$executable || !file_exists($executable)) {
+
+            if (! $executable || ! file_exists($executable)) {
                 return;
             }
 
@@ -57,23 +56,24 @@ class ComponentServiceProvider extends ServiceProvider
         }
     }
 
-    private function getComponentExecutable(string $componentPath, array $config): ?string
+    private function getComponentExecutable(string $componentPath, array $config): string
     {
         if (isset($config['executable'])) {
-            return $componentPath . '/bin/' . $config['executable'];
+            return $componentPath.'/bin/'.$config['executable'];
         }
 
         $componentName = basename($componentPath);
-        return $componentPath . '/bin/' . $componentName;
+
+        return $componentPath.'/bin/'.$componentName;
     }
 
     private function createAndRegisterProxyCommand(string $command, string $executable, string $description): void
     {
         // Create a dynamic command class that extends ConduitCommand
         $className = $this->generateCommandClassName($command);
-        
+
         eval($this->generateCommandClass($className, $command, $executable, $description));
-        
+
         // Register the command
         $this->commands([$className]);
     }
@@ -81,14 +81,15 @@ class ComponentServiceProvider extends ServiceProvider
     private function generateCommandClassName(string $command): string
     {
         // Create a safe class name from the command
-        $className = 'Dynamic' . str_replace([':', '-', '.'], '', ucwords($command, ':-.')) . 'ProxyCommand';
+        $className = 'Dynamic'.str_replace([':', '-', '.'], '', ucwords($command, ':-.')).'ProxyCommand';
+
         return "App\\Commands\\Dynamic\\{$className}";
     }
 
     private function generateCommandClass(string $className, string $command, string $executable, string $description): string
     {
         $shortClassName = substr(strrchr($className, '\\'), 1);
-        
+
         return "
         namespace App\Commands\Dynamic;
         

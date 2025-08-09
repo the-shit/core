@@ -14,7 +14,7 @@ return [
 
         'todo' => [
             'driver' => 'sqlite',
-            'database' => env('HOME') . '/.conduit/todo.db',
+            'database' => env('HOME').'/.conduit/todo.db',
             'prefix' => '',
             'foreign_key_constraints' => true,
         ],
