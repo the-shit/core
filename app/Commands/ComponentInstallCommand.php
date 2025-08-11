@@ -2,14 +2,15 @@
 
 namespace App\Commands;
 
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Process;
+use JordanPartridge\GithubClient\Facades\Github;
+use JordanPartridge\GithubClient\Exceptions\ApiException;
 
 use function Laravel\Prompts\warning;
 
 class ComponentInstallCommand extends ConduitCommand
 {
-    protected $signature = 'install {component : Component name (e.g., spotify, github)} {version? : Version constraint (e.g., ^1.0, ~2.1, 1.2.3)} {--json : Output as JSON}';
+    protected $signature = 'install {component : Component name (e.g., spotify, github)} {version? : Version constraint (e.g., ^1.0, ~2.1, 1.2.3)} {--branch= : Install from a specific branch} {--json : Output as JSON}';
 
     protected $description = 'Install a component from THE SHIT ecosystem';
 
@@ -17,6 +18,7 @@ class ComponentInstallCommand extends ConduitCommand
     {
         $component = $this->argument('component');
         $version = $this->argument('version') ?? '*';
+        $branch = $this->option('branch');
         $componentsDir = base_path('💩-components');
         $componentPath = $componentsDir.'/'.$component;
 
@@ -34,18 +36,39 @@ class ComponentInstallCommand extends ConduitCommand
             mkdir($componentsDir, 0755, true);
         }
 
-        // Determine the GitHub repo
-        $repo = "S-H-I-T/{$component}";
+        // Find the component repository by searching for the conduit-component topic
+        $repo = $this->findComponentRepository($component);
+        
+        if (!$repo) {
+            $this->forceOutput("❌ Component '{$component}' not found in Conduit ecosystem", 'error');
+            $this->smartInfo("💡 Try running 'conduit search {$component}' to find available components");
+            return self::FAILURE;
+        }
 
         try {
+            // Check if --branch option was used
+            if ($branch) {
+                $this->smartInfo("🌿 Installing from branch: {$branch}...");
+                return $this->cloneFromGitHub($repo, $componentPath, $branch);
+            }
+            
+            // Check if version is a branch reference (starts with branch: or contains /)
+            if (str_starts_with($version, 'branch:') || str_contains($version, '/')) {
+                $branch = str_starts_with($version, 'branch:') ? substr($version, 7) : $version;
+                $this->smartInfo("🌿 Installing from branch: {$branch}...");
+                
+                return $this->cloneFromGitHub($repo, $componentPath, $branch);
+            }
+            
             // Get releases from GitHub
             $releases = $this->getGitHubReleases($repo);
 
             if (empty($releases)) {
-                // No releases, try to clone from main branch
-                $this->smartInfo('📦 No releases found, installing from main branch...');
+                // No releases, try to clone from default branch
+                $defaultBranch = $this->getDefaultBranch($repo);
+                $this->smartInfo("📦 No releases found, installing from {$defaultBranch} branch...");
 
-                return $this->cloneFromGitHub($repo, $componentPath, 'main');
+                return $this->cloneFromGitHub($repo, $componentPath, $defaultBranch);
             }
 
             // Find matching version
@@ -72,27 +95,29 @@ class ComponentInstallCommand extends ConduitCommand
     private function getGitHubReleases(string $repo): array
     {
         try {
-            // Use HTTP directly for unauthenticated requests
-            $response = Http::withHeaders([
-                'Accept' => 'application/vnd.github.v3+json',
-                'User-Agent' => 'THE-SHIT-CLI',
-            ])->get("https://api.github.com/repos/{$repo}/releases");
-
-            if ($response->failed()) {
-                if ($response->status() === 404) {
-                    // Repo might not exist or have releases
-                    return [];
-                }
-                throw new \Exception('GitHub API error: '.$response->body());
-            }
-
-            return $response->json();
-        } catch (\Exception $e) {
+            // Parse owner and repo from full name
+            [$owner, $repoName] = explode('/', $repo);
+            
+            // Use GitHub client to get releases
+            $releases = Github::releases()->all($owner, $repoName);
+            
+            // Convert ReleaseData objects to arrays for compatibility
+            return array_map(fn($release) => [
+                'tag_name' => $release->tag_name,
+                'name' => $release->name,
+                'prerelease' => $release->prerelease,
+                'draft' => $release->draft,
+                'published_at' => $release->published_at,
+            ], $releases);
+        } catch (ApiException $e) {
             // Check if it's a 404 (repo doesn't exist or no releases)
-            if (str_contains($e->getMessage(), '404')) {
+            if ($e->getCode() === 404) {
                 return [];
             }
             throw new \Exception('GitHub API error: '.$e->getMessage());
+        } catch (\Exception $e) {
+            // Repo might not exist or have other issues
+            return [];
         }
     }
 
@@ -160,12 +185,15 @@ class ComponentInstallCommand extends ConduitCommand
             }
         }
 
-        // Make executable if exists
-        $manifest = json_decode(file_get_contents($path.'/💩.json'), true);
-        if (isset($manifest['executable'])) {
-            $executable = $path.'/bin/'.$manifest['executable'];
-            if (file_exists($executable)) {
-                chmod($executable, 0755);
+        // Make executable if manifest exists
+        $manifestPath = $path.'/💩.json';
+        if (file_exists($manifestPath)) {
+            $manifest = json_decode(file_get_contents($manifestPath), true);
+            if (isset($manifest['executable'])) {
+                $executable = $path.'/bin/'.$manifest['executable'];
+                if (file_exists($executable)) {
+                    chmod($executable, 0755);
+                }
             }
         }
 
@@ -178,5 +206,79 @@ class ComponentInstallCommand extends ConduitCommand
     private function exec(string $command): void
     {
         Process::run($command);
+    }
+
+    private function getDefaultBranch(string $repo): string
+    {
+        try {
+            // Use the Repo value object for proper validation
+            $repoObj = \JordanPartridge\GithubClient\ValueObjects\Repo::fromFullName($repo);
+            
+            // Get the repository info to find default branch
+            $repoData = Github::repos()->get($repoObj);
+            
+            // If it's not master, make fun of them
+            if ($repoData->default_branch !== 'master') {
+                $this->smartInfo("😏 Using '{$repoData->default_branch}' branch... how progressive of them");
+            }
+            
+            return $repoData->default_branch;
+        } catch (\Exception $e) {
+            // If we can't get the repo info, fallback to master
+            // The old-school way is usually the right way
+            return 'master';
+        }
+    }
+    
+    /**
+     * Find a component repository by searching for component topics
+     */
+    private function findComponentRepository(string $component): ?string
+    {
+        try {
+            // Search ONLY for shit-component topic
+            // If it ain't shit, we ain't installing it!
+            $searchQuery = urlencode("topic:shit-component {$component} in:name");
+            $response = \Illuminate\Support\Facades\Http::withHeaders([
+                'Accept' => 'application/vnd.github.v3+json', 
+                'User-Agent' => 'THE-SHIT-CLI',
+            ])->get("https://api.github.com/search/repositories?q={$searchQuery}&sort=stars&order=desc");
+            
+            if ($response->successful()) {
+                $data = $response->json();
+                
+                if ($data['total_count'] > 0) {
+                    // Try to find exact match first
+                    foreach ($data['items'] as $item) {
+                        if (strtolower($item['name']) === strtolower($component)) {
+                            $this->smartInfo("💩 Found THE SHIT component: {$item['full_name']}");
+                            return $item['full_name'];
+                        }
+                    }
+                    
+                    // If no exact match, take the first result
+                    $firstMatch = $data['items'][0];
+                    $this->smartInfo("💩 Found THE SHIT component: {$firstMatch['full_name']}");
+                    return $firstMatch['full_name'];
+                }
+            }
+        } catch (\Exception $e) {
+            // Search failed, fallback to config-based approach
+        }
+        
+        // Fallback to the configured organization
+        $githubOrg = config('conduit.components.github_username', 'the-shit');
+        $fallbackRepo = "{$githubOrg}/{$component}";
+        
+        // Check if this repo exists
+        try {
+            $repoObj = \JordanPartridge\GithubClient\ValueObjects\Repo::fromFullName($fallbackRepo);
+            Github::repos()->get($repoObj);
+            return $fallbackRepo;
+        } catch (\Exception $e) {
+            // Repo doesn't exist
+        }
+        
+        return null;
     }
 }

@@ -30,7 +30,7 @@ return [
     |
     */
     'components' => [
-        'github_username' => env('CONDUIT_GITHUB_USERNAME', 'S-H-I-T'),
+        'github_username' => env('CONDUIT_GITHUB_USERNAME', 'the-shit'),
         'namespace' => env('CONDUIT_NAMESPACE', 'App'),
         'author_name' => env('CONDUIT_AUTHOR_NAME', 'Your Name'),
         'author_email' => env('CONDUIT_AUTHOR_EMAIL', 'you@example.com'),

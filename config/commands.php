@@ -77,7 +77,18 @@ return [
     */
 
     'remove' => [
-        //
+        // Remove test command since we have quality component
+        'test',
+        // Remove migrate commands - not needed in core
+        'migrate',
+        'migrate:fresh',
+        'migrate:install', 
+        'migrate:refresh',
+        'migrate:reset',
+        'migrate:rollback',
+        'migrate:status',
+        'db:seed',
+        'db:wipe',
     ],
 
 ];

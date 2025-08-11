@@ -17,10 +17,14 @@
     ],
     "require": {
         "php": "^8.2",
-        "jordanpartridge/github-client": "^2.9",
-        "laravel-zero/framework": "^12.0"
+        "illuminate/database": "^12.17",
+        "jordanpartridge/conduit-interfaces": "^1.1",
+        "jordanpartridge/github-client": "^3.0",
+        "laravel-zero/framework": "^12.0",
+        "spatie/laravel-activitylog": "^4.10"
     },
     "require-dev": {
+        "fakerphp/faker": "^1.23",
         "larastan/larastan": "^3.6",
         "laravel/pint": "^1.22",
         "mockery/mockery": "^1.6.12",

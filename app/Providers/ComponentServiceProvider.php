@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use App\Commands\ConduitCommand;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\Artisan;
 
 class ComponentServiceProvider extends ServiceProvider
 {
@@ -25,30 +25,37 @@ class ComponentServiceProvider extends ServiceProvider
             return;
         }
 
+        // Look for components with 💩.json manifest files
         foreach (glob($componentsPath.'/*/💩.json') as $manifestPath) {
-            $this->registerComponent(dirname($manifestPath));
+            $componentPath = dirname($manifestPath);
+            // Skip hidden directories (starting with .)
+            if (str_starts_with(basename($componentPath), '.')) {
+                continue;
+            }
+            $this->registerComponent($componentPath);
         }
     }
 
     private function registerComponent(string $componentPath): void
     {
         try {
-            $config = json_decode(file_get_contents($componentPath.'/💩.json'), true);
-
-            if (! isset($config['commands'])) {
+            // Read the 💩.json manifest
+            $manifestPath = $componentPath . '/💩.json';
+            if (!file_exists($manifestPath)) {
                 return;
             }
-
-            // Get the executable path
-            $executable = $this->getComponentExecutable($componentPath, $config);
-
-            if (! $executable || ! file_exists($executable)) {
+            
+            $manifest = json_decode(file_get_contents($manifestPath), true);
+            
+            if (!isset($manifest['commands'])) {
                 return;
             }
-
-            // Create and register proxy commands
-            foreach ($config['commands'] as $command => $description) {
-                $this->createAndRegisterProxyCommand($command, $executable, $description);
+            
+            $componentName = basename($componentPath);
+            
+            // Register proxy commands for each command in the manifest
+            foreach ($manifest['commands'] as $commandName => $description) {
+                $this->registerProxyCommand($componentPath, $componentName, $commandName, $description);
             }
 
         } catch (\Exception $e) {
@@ -56,102 +63,70 @@ class ComponentServiceProvider extends ServiceProvider
         }
     }
 
-    private function getComponentExecutable(string $componentPath, array $config): string
+    private function registerProxyCommand(string $componentPath, string $componentName, string $commandName, string $description): void
     {
-        if (isset($config['executable'])) {
-            return $componentPath.'/bin/'.$config['executable'];
-        }
-
-        $componentName = basename($componentPath);
-
-        return $componentPath.'/bin/'.$componentName;
-    }
-
-    private function createAndRegisterProxyCommand(string $command, string $executable, string $description): void
-    {
-        // Create a dynamic command class that extends ConduitCommand
-        $className = $this->generateCommandClassName($command);
-
-        eval($this->generateCommandClass($className, $command, $executable, $description));
-
-        // Register the command
-        $this->commands([$className]);
-    }
-
-    private function generateCommandClassName(string $command): string
-    {
-        // Create a safe class name from the command
-        $className = 'Dynamic'.str_replace([':', '-', '.'], '', ucwords($command, ':-.')).'ProxyCommand';
-
-        return "App\\Commands\\Dynamic\\{$className}";
-    }
-
-    private function generateCommandClass(string $className, string $command, string $executable, string $description): string
-    {
-        $shortClassName = substr(strrchr($className, '\\'), 1);
-
-        return "
-        namespace App\Commands\Dynamic;
-        
-        use App\Commands\ConduitCommand;
-        use Symfony\Component\Process\Process;
-        
-        class {$shortClassName} extends ConduitCommand
-        {
-            protected \$signature = '{$command} {args?*}';
-            protected \$description = '{$description}';
+        // Register a closure-based command that acts as a proxy
+        // Add common options that we'll pass through
+        Artisan::command($commandName.' {args?*} {--json : Output as JSON}', function () use ($componentPath, $componentName, $commandName) {
+            // Strip the component prefix from the command name (e.g., "spotify:pause" -> "pause")
+            $baseCommand = str_replace($componentName.':', '', $commandName);
             
-            protected function executeCommand(): int
-            {
-                return \$this->executeComponentCommand();
+            // Build command to execute the component's Laravel Zero app
+            // Try to find the executable - could be 'component', 'spotify', or the component name
+            $possibleBinaries = [
+                $componentPath . '/' . $componentName,  // e.g., spotify
+                $componentPath . '/component',          // default Laravel Zero
+                $componentPath . '/application',        // original Laravel Zero name
+            ];
+            
+            $componentBinary = null;
+            foreach ($possibleBinaries as $binary) {
+                if (file_exists($binary)) {
+                    $componentBinary = $binary;
+                    break;
+                }
             }
             
-            private function executeComponentCommand(): int
-            {
-                // Extract method from command (e.g., 'spotify:play' -> 'play')
-                \$method = explode(':', '{$command}')[1] ?? '{$command}';
-                
-                // Build command arguments
-                \$args = ['php', '{$executable}', \$method];
-                
-                // Add any extra arguments (like --reset)
-                if (\$this->argument('args')) {
-                    foreach (\$this->argument('args') as \$arg) {
-                        \$args[] = \$arg;
+            if (!$componentBinary) {
+                $this->error("❌ Component executable not found in: {$componentPath}");
+                return 1;
+            }
+            
+            // Build the full command with PHP (escape PHP_BINARY since it might have spaces)
+            $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($componentBinary) . ' ' . escapeshellarg($baseCommand);
+            
+            // Add all arguments
+            $args = $this->argument('args');
+            if (!empty($args)) {
+                foreach ($args as $arg) {
+                    // Pass options through as-is (they'll have -- prefix)
+                    if (str_starts_with($arg, '--')) {
+                        $command .= ' ' . $arg;
+                    } else {
+                        $command .= ' ' . escapeshellarg($arg);
                     }
-                }
-                
-                // Add command options
-                foreach (\$this->getDefinition()->getOptions() as \$option) {
-                    \$name = \$option->getName();
-                    if (in_array(\$name, ['help', 'quiet', 'verbose', 'version', 'ansi', 'no-ansi', 'no-interaction', 'env', 'silent'])) {
-                        continue;
-                    }
-                    
-                    \$value = \$this->option(\$name);
-                    if (\$value !== null && \$value !== false && \$value !== '') {
-                        if (\$value === true) {
-                            \$args[] = '--' . \$name;
-                        } else {
-                            \$args[] = '--' . \$name . '=' . \$value;
-                        }
-                    }
-                }
-                
-                // Execute the component
-                \$process = new Process(\$args);
-                \$process->setTimeout(300);
-                \$process->setTty(Process::isTtySupported());
-                
-                try {
-                    \$exitCode = \$process->run();
-                    
-                    return \$exitCode;
-                } catch (\Exception \$e) {
-                    \$this->forceOutput('❌ Component error: ' . \$e->getMessage(), 'error');
-                    return self::FAILURE;
                 }
             }
-        }";
+            
+            // Add standard options
+            if ($this->option('json')) {
+                $command .= ' --json';
+            }
+            
+            // Use Process facade to run the command
+            $result = \Illuminate\Support\Facades\Process::run($command);
+            
+            // Output the result
+            if ($result->output()) {
+                $this->getOutput()->write($result->output());
+            }
+            
+            // Also output any error output
+            if ($result->errorOutput()) {
+                $this->getOutput()->write($result->errorOutput());
+            }
+            
+            return $result->exitCode();
+        })->describe($description);
     }
 }

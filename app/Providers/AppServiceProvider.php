@@ -19,7 +19,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Register component service provider
-        $this->app->register(ComponentServiceProvider::class);
+        // Use V2 component service provider (with V1 fallback)
+        $this->app->register(ComponentServiceProviderV2::class);
+        
+        // Keep the old one available but not registered
+        // $this->app->register(ComponentServiceProvider::class);
     }
 }
