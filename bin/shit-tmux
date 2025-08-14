@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+
+# 🎭 THE SHIT Tmux Orchestrator
+# Launch and manage multiple orchestrated Claude Code sessions
+
+set -e
+
+# Configuration
+SHIT_PATH="${SHIT_PATH:-$(dirname "$(dirname "$(realpath "$0")")")}"
+SHIT_CLI="${SHIT_PATH}/💩"
+CLAUDE_WRAPPER="${SHIT_PATH}/bin/claude-orchestrated"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m'
+
+# Print header
+print_header() {
+    echo -e "${MAGENTA}"
+    echo "╔══════════════════════════════════════════╗"
+    echo "║     🎭 THE SHIT Tmux Orchestrator 🎭     ║"
+    echo "╚══════════════════════════════════════════╝"
+    echo -e "${NC}"
+}
+
+# Show usage
+show_usage() {
+    echo "Usage: $0 [command] [options]"
+    echo ""
+    echo "Commands:"
+    echo "  launch [name]    Launch a new orchestrated Claude session"
+    echo "  list            List all orchestrated sessions"
+    echo "  attach [name]   Attach to an existing session"
+    echo "  kill [name]     Kill a session and release its locks"
+    echo "  dashboard       Show live orchestration dashboard"
+    echo "  status          Show orchestration status"
+    echo ""
+    echo "Examples:"
+    echo "  $0 launch feature-x    # Start Claude working on feature X"
+    echo "  $0 launch auth         # Start Claude working on auth"
+    echo "  $0 list               # See all active sessions"
+    echo "  $0 dashboard          # Monitor all Claude instances"
+}
+
+# Launch new orchestrated session
+launch_session() {
+    local session_name="${1:-claude-$(date +%s)}"
+    local task="${2:-Claude Code Session}"
+    
+    echo -e "${CYAN}Launching orchestrated session: ${session_name}${NC}"
+    
+    # Check if session already exists
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        echo -e "${RED}Session '$session_name' already exists!${NC}"
+        echo "Use '$0 attach $session_name' to connect to it"
+        exit 1
+    fi
+    
+    # Create new tmux session with orchestrated Claude
+    tmux new-session -d -s "$session_name" -n "claude" \
+        "export CLAUDE_TASK='$task'; $CLAUDE_WRAPPER"
+    
+    # Add orchestration panes
+    tmux split-window -t "$session_name:claude" -h -p 30 \
+        "watch -n 2 php $SHIT_CLI orchestrate status"
+    
+    tmux split-window -t "$session_name:claude.1" -v \
+        "tail -f ${SHIT_PATH}/storage/orchestration/conflicts.jsonl 2>/dev/null | while read line; do echo \"\$(date '+%H:%M:%S') \$line\"; done"
+    
+    # Focus on main Claude pane
+    tmux select-pane -t "$session_name:claude.0"
+    
+    echo -e "${GREEN}✅ Session '$session_name' launched!${NC}"
+    echo ""
+    echo "Panes:"
+    echo "  • Main: Claude Code (orchestrated)"
+    echo "  • Right Top: Live status monitor"
+    echo "  • Right Bottom: Conflict log"
+    echo ""
+    echo -e "Attach with: ${YELLOW}tmux attach -t $session_name${NC}"
+}
+
+# List orchestrated sessions
+list_sessions() {
+    echo -e "${CYAN}Active Orchestrated Sessions:${NC}"
+    echo ""
+    
+    # Get tmux sessions
+    sessions=$(tmux list-sessions 2>/dev/null | grep -E "^claude" || true)
+    
+    if [ -z "$sessions" ]; then
+        echo "  No orchestrated sessions running"
+    else
+        echo "$sessions" | while IFS=: read -r name rest; do
+            # Check orchestration status for this session
+            instance_info=$(php "$SHIT_CLI" orchestrate status --no-interaction 2>/dev/null | \
+                grep "$name" || echo "")
+            
+            if [ -n "$instance_info" ]; then
+                echo -e "  ${GREEN}●${NC} $name (orchestrated)"
+            else
+                echo -e "  ${YELLOW}○${NC} $name (not orchestrated)"
+            fi
+        done
+    fi
+    
+    echo ""
+    
+    # Show orchestration summary
+    php "$SHIT_CLI" orchestrate status 2>/dev/null | head -20
+}
+
+# Attach to session
+attach_session() {
+    local session_name="$1"
+    
+    if [ -z "$session_name" ]; then
+        echo -e "${RED}Please specify a session name${NC}"
+        list_sessions
+        exit 1
+    fi
+    
+    if ! tmux has-session -t "$session_name" 2>/dev/null; then
+        echo -e "${RED}Session '$session_name' not found${NC}"
+        list_sessions
+        exit 1
+    fi
+    
+    echo -e "${CYAN}Attaching to session: $session_name${NC}"
+    tmux attach -t "$session_name"
+}
+
+# Kill session and release locks
+kill_session() {
+    local session_name="$1"
+    
+    if [ -z "$session_name" ]; then
+        echo -e "${RED}Please specify a session name${NC}"
+        exit 1
+    fi
+    
+    echo -e "${YELLOW}Killing session: $session_name${NC}"
+    
+    # Find instance ID for this session
+    instance_id=$(php "$SHIT_CLI" orchestrate status --no-interaction 2>/dev/null | \
+        jq -r '.instances | to_entries[] | select(.value.tmux_session == "'$session_name'") | .key' || echo "")
+    
+    if [ -n "$instance_id" ]; then
+        echo "  Releasing locks for instance: $instance_id"
+        php "$SHIT_CLI" orchestrate release --instance="$instance_id" --no-interaction
+    fi
+    
+    # Kill tmux session
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        tmux kill-session -t "$session_name"
+        echo -e "${GREEN}✅ Session killed and locks released${NC}"
+    else
+        echo -e "${YELLOW}Session not found in tmux${NC}"
+    fi
+}
+
+# Show dashboard
+show_dashboard() {
+    if [ "$1" == "--watch" ]; then
+        watch -n 2 -c "php $SHIT_CLI orchestrate dashboard"
+    else
+        # Create dashboard session
+        local session_name="orchestration-dashboard"
+        
+        if tmux has-session -t "$session_name" 2>/dev/null; then
+            echo -e "${CYAN}Attaching to existing dashboard...${NC}"
+            tmux attach -t "$session_name"
+        else
+            echo -e "${CYAN}Creating orchestration dashboard...${NC}"
+            
+            # Main dashboard
+            tmux new-session -d -s "$session_name" -n "dashboard" \
+                "watch -n 1 -c php $SHIT_CLI orchestrate dashboard"
+            
+            # Status pane
+            tmux split-window -t "$session_name:dashboard" -h \
+                "watch -n 2 php $SHIT_CLI orchestrate status"
+            
+            # Conflicts pane
+            tmux split-window -t "$session_name:dashboard.1" -v \
+                "watch -n 3 'echo \"Recent Conflicts:\"; tail -20 ${SHIT_PATH}/storage/orchestration/conflicts.jsonl 2>/dev/null | jq -r \"\\\"\\(.timestamp) - \\(.file) (\\(.requested_by) vs \\(.locked_by))\\\"\" || echo \"No conflicts\"'"
+            
+            # Activity log
+            tmux split-window -t "$session_name:dashboard.0" -v -p 30 \
+                "tail -f ${SHIT_PATH}/storage/orchestration/state.json | jq '.instances | to_entries | map(select(.value.status == \"active\")) | .[].value | \"\\(.id): \\(.task)\"' --unbuffered 2>/dev/null || echo 'Waiting for activity...'"
+            
+            tmux attach -t "$session_name"
+        fi
+    fi
+}
+
+# Main execution
+main() {
+    print_header
+    
+    case "${1:-}" in
+        launch)
+            launch_session "${2:-}" "${3:-}"
+            ;;
+        list)
+            list_sessions
+            ;;
+        attach)
+            attach_session "$2"
+            ;;
+        kill)
+            kill_session "$2"
+            ;;
+        dashboard)
+            show_dashboard "${2:-}"
+            ;;
+        status)
+            php "$SHIT_CLI" orchestrate status
+            ;;
+        *)
+            show_usage
+            ;;
+    esac
+}
+
+main "$@"

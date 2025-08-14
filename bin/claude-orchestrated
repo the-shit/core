@@ -1,0 +1,205 @@
+#!/usr/bin/env bash
+
+# 🎭 THE SHIT Claude Orchestration Wrapper
+# Automatically tracks Claude Code instances and prevents conflicts
+
+set -e
+
+# Configuration
+SHIT_PATH="${SHIT_PATH:-$(dirname "$(dirname "$(realpath "$0")")")}"
+SHIT_CLI="${SHIT_PATH}/💩"
+INSTANCE_ID=""
+CLEANUP_REGISTERED=false
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Logging function
+log() {
+    echo -e "${CYAN}[ORCHESTRATOR]${NC} $1" >&2
+}
+
+error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1" >&2
+}
+
+warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1" >&2
+}
+
+# Generate instance ID
+generate_instance_id() {
+    if [ -n "$TMUX" ]; then
+        TMUX_SESSION=$(tmux display-message -p "#S" 2>/dev/null || echo "")
+        if [ -n "$TMUX_SESSION" ]; then
+            INSTANCE_ID="claude_${TMUX_SESSION}_$$"
+        fi
+    fi
+    
+    if [ -z "$INSTANCE_ID" ]; then
+        INSTANCE_ID="claude_$(uuidgen | cut -c1-8)_$$"
+    fi
+    
+    export CLAUDE_INSTANCE_ID="$INSTANCE_ID"
+}
+
+# Register with orchestrator
+register_instance() {
+    log "Registering Claude instance: $INSTANCE_ID"
+    
+    if php "$SHIT_CLI" orchestrate register \
+        --instance="$INSTANCE_ID" \
+        --tmux="$TMUX_SESSION" \
+        --pid=$$ \
+        --no-interaction > /dev/null 2>&1; then
+        success "Registered with orchestrator as $INSTANCE_ID"
+        CLEANUP_REGISTERED=true
+        
+        # Start heartbeat in background
+        start_heartbeat &
+        HEARTBEAT_PID=$!
+    else
+        error "Failed to register with orchestrator"
+        exit 1
+    fi
+}
+
+# Heartbeat to keep instance alive
+start_heartbeat() {
+    while true; do
+        sleep 30
+        php "$SHIT_CLI" orchestrate update \
+            --instance="$INSTANCE_ID" \
+            --heartbeat \
+            --no-interaction > /dev/null 2>&1 || true
+    done
+}
+
+# Cleanup on exit
+cleanup() {
+    if [ "$CLEANUP_REGISTERED" = true ]; then
+        log "Releasing instance $INSTANCE_ID..."
+        
+        # Kill heartbeat
+        if [ -n "$HEARTBEAT_PID" ]; then
+            kill $HEARTBEAT_PID 2>/dev/null || true
+        fi
+        
+        # Release instance
+        php "$SHIT_CLI" orchestrate release \
+            --instance="$INSTANCE_ID" \
+            --no-interaction > /dev/null 2>&1 || true
+            
+        success "Instance released"
+    fi
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT INT TERM
+
+# Check file before editing (hook for Claude settings)
+check_file_before_edit() {
+    local file="$1"
+    local action="${2:-edit}"
+    
+    if [ -z "$file" ]; then
+        return 0
+    fi
+    
+    # Make path absolute if relative
+    if [[ ! "$file" = /* ]]; then
+        file="$(pwd)/$file"
+    fi
+    
+    log "Checking file availability: $file"
+    
+    # Check with orchestrator
+    if php "$SHIT_CLI" orchestrate check \
+        --instance="$INSTANCE_ID" \
+        --check-file="$file" \
+        --action-type="$action" \
+        --no-interaction > /dev/null 2>&1; then
+        success "File available: $file"
+        return 0
+    else
+        error "FILE CONFLICT: $file is being edited by another Claude instance!"
+        warning "Another Claude is currently working on this file."
+        echo ""
+        echo "Options:"
+        echo "  1. Wait for the other instance to finish"
+        echo "  2. Use 'php $SHIT_CLI orchestrate status' to see who has the lock"
+        echo "  3. Force release with 'php $SHIT_CLI orchestrate conflicts --resolve'"
+        echo ""
+        return 1
+    fi
+}
+
+# Export the check function for hooks
+export -f check_file_before_edit
+export CLAUDE_INSTANCE_ID
+export SHIT_CLI
+
+# Main execution
+main() {
+    log "Starting orchestrated Claude Code session"
+    
+    # Generate instance ID
+    generate_instance_id
+    
+    # Register with orchestrator
+    register_instance
+    
+    # Set up Claude hooks if settings file exists
+    CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+    if [ -f "$CLAUDE_SETTINGS" ]; then
+        log "Configuring Claude hooks..."
+        
+        # Create temporary settings with our hooks
+        TEMP_SETTINGS=$(mktemp)
+        
+        # Add our orchestration hooks to settings
+        jq '. + {
+            "hooks": {
+                "beforeEdit": "source '"$0"' && check_file_before_edit \"$CLAUDE_FILE\" edit",
+                "beforeWrite": "source '"$0"' && check_file_before_edit \"$CLAUDE_FILE\" create",
+                "afterEdit": "php '"$SHIT_CLI"' orchestrate update --instance=\"$CLAUDE_INSTANCE_ID\" --files=\"$CLAUDE_FILE\" --no-interaction",
+                "onExit": "php '"$SHIT_CLI"' orchestrate release --instance=\"$CLAUDE_INSTANCE_ID\" --no-interaction"
+            }
+        }' "$CLAUDE_SETTINGS" > "$TEMP_SETTINGS" 2>/dev/null || cp "$CLAUDE_SETTINGS" "$TEMP_SETTINGS"
+        
+        export CLAUDE_SETTINGS_OVERRIDE="$TEMP_SETTINGS"
+    fi
+    
+    # Show orchestration status
+    echo ""
+    success "🎭 THE SHIT Orchestration Active"
+    echo "  Instance: $INSTANCE_ID"
+    [ -n "$TMUX_SESSION" ] && echo "  Tmux: $TMUX_SESSION"
+    echo "  PID: $$"
+    echo ""
+    echo "  Conflict prevention: ✅ Enabled"
+    echo "  File locking: ✅ Active"
+    echo "  Heartbeat: ✅ Running"
+    echo ""
+    
+    # Launch Claude Code with arguments
+    log "Launching Claude Code..."
+    claude-code "$@"
+    CLAUDE_EXIT=$?
+    
+    # Clean up temp settings
+    [ -n "$TEMP_SETTINGS" ] && rm -f "$TEMP_SETTINGS"
+    
+    exit $CLAUDE_EXIT
+}
+
+# Run main
+main "$@"

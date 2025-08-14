@@ -1,5 +1,8 @@
 <?php
 
+// Load test helpers before anything else
+require_once __DIR__.'/helpers.php';
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -12,6 +15,7 @@
 */
 
 uses(Tests\TestCase::class)->in('Feature');
+uses(Tests\TestCase::class)->in('Unit');
 
 /*
 |--------------------------------------------------------------------------

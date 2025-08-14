@@ -1,41 +1,150 @@
-<p align="center">
-    <img title="Laravel Zero" height="100" src="https://raw.githubusercontent.com/laravel-zero/docs/master/images/logo/laravel-zero-readme.png" alt="Laravel Zero Logo" />
-</p>
+# 💩 THE SHIT
 
-<p align="center">
-  <a href="https://github.com/laravel-zero/framework/actions"><img src="https://github.com/laravel-zero/laravel-zero/actions/workflows/tests.yml/badge.svg" alt="Build Status" /></a>
-  <a href="https://packagist.org/packages/laravel-zero/framework"><img src="https://img.shields.io/packagist/dt/laravel-zero/framework.svg" alt="Total Downloads" /></a>
-  <a href="https://packagist.org/packages/laravel-zero/framework"><img src="https://img.shields.io/packagist/v/laravel-zero/framework.svg?label=stable" alt="Latest Stable Version" /></a>
-  <a href="https://packagist.org/packages/laravel-zero/framework"><img src="https://img.shields.io/packagist/l/laravel-zero/framework.svg" alt="License" /></a>
-</p>
+> **S**caling **H**umans **I**nto **T**omorrow
 
-Laravel Zero was created by [Nuno Maduro](https://github.com/nunomaduro) and [Owen Voke](https://github.com/owenvoke), and is a micro-framework that provides an elegant starting point for your console application. It is an **unofficial** and customized version of Laravel optimized for building command-line applications.
+A Laravel Zero CLI framework built for Human-AI collaboration, featuring a powerful component-based architecture.
 
-- Built on top of the [Laravel](https://laravel.com) components.
-- Optional installation of Laravel [Eloquent](https://laravel-zero.com/docs/database/), Laravel [Logging](https://laravel-zero.com/docs/logging/) and many others.
-- Supports interactive [menus](https://laravel-zero.com/docs/build-interactive-menus/) and [desktop notifications](https://laravel-zero.com/docs/send-desktop-notifications/) on Linux, Windows & MacOS.
-- Ships with a [Scheduler](https://laravel-zero.com/docs/task-scheduling/) and  a [Standalone Compiler](https://laravel-zero.com/docs/build-a-standalone-application/).
-- Integration with [Collision](https://github.com/nunomaduro/collision) - Beautiful error reporting
-- Follow the creator Nuno Maduro:
-    - YouTube: **[youtube.com/@nunomaduro](https://www.youtube.com/@nunomaduro)** — Videos every weekday
-    - Twitch: **[twitch.tv/enunomaduro](https://www.twitch.tv/enunomaduro)** — Streams (almost) every weekday
-    - Twitter / X: **[x.com/enunomaduro](https://x.com/enunomaduro)**
-    - LinkedIn: **[linkedin.com/in/nunomaduro](https://www.linkedin.com/in/nunomaduro)**
-    - Instagram: **[instagram.com/enunomaduro](https://www.instagram.com/enunomaduro)**
-    - Tiktok: **[tiktok.com/@enunomaduro](https://www.tiktok.com/@enunomaduro)**
+## Installation
 
-------
+### Via Composer (Recommended)
+```bash
+composer global require the-shit/core
+```
 
-## Documentation
+### From Source
+```bash
+git clone https://github.com/the-shit/core.git
+cd core
+composer install
+ln -s $(pwd)/💩 /usr/local/bin/💩
+```
 
-For full documentation, visit [laravel-zero.com](https://laravel-zero.com/).
+## Quick Start
 
-## Support the development
-**Do you like this project? Support it by donating**
+```bash
+# List all commands
+💩 list
 
-- PayPal: [Donate](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=66BYDWAT92N6L)
-- Patreon: [Donate](https://www.patreon.com/nunomaduro)
+# Install a component
+💩 install spotify
+
+# List all Laravel sites (with site-manager component)
+💩 sites:list
+
+# Check AI status
+💩 ai:status
+```
+
+## Component System
+
+THE SHIT uses a modular component architecture. Components are discovered from three locations:
+
+1. **Local** (`./💩-components/`) - For development
+2. **User** (`~/.shit/components/`) - For user-installed components
+3. **System** (`/usr/local/share/shit/components/`) - For system-wide components
+
+### Installing Components
+
+```bash
+# Install locally (default)
+💩 install spotify
+
+# Install globally for user
+💩 install spotify --global
+
+# Install from specific branch
+💩 install spotify --branch develop
+```
+
+### Available Components
+
+- **ai** - Multi-provider AI integration (OpenAI, Anthropic, xAI)
+- **spotify** - Control Spotify playback from the terminal
+- **orchestrator** - Manage multiple Claude Code instances
+- **obsidian-bridge** - Sync with Obsidian knowledge management
+- **site-manager** - Manage Laravel projects with Herd integration
+- **focus** - Productivity tracking with music awareness
+
+### Creating Components
+
+Components are standalone Laravel Zero applications that integrate seamlessly with THE SHIT.
+
+```bash
+# Scaffold a new component
+💩 component:scaffold my-component
+
+# Or scaffold globally
+💩 component:scaffold my-component --global
+```
+
+Each component needs:
+- `💩.json` - Component manifest
+- `composer.json` - Dependencies
+- `app/Commands/` - Command classes
+
+## Configuration
+
+Configure paths and defaults via environment variables:
+
+```bash
+# .env
+SHIT_DEFAULT_INSTALL=user
+SHIT_USER_COMPONENTS=/custom/path/components
+SHIT_SITES_PATH=/custom/sites/path
+```
+
+## Human-AI Collaboration
+
+THE SHIT automatically detects interaction mode:
+
+- **Human Mode** - Interactive prompts, formatted output
+- **AI Mode** - JSON responses, non-interactive
+- **CI Mode** - Automated pipelines
+
+Set your user agent:
+```bash
+export CONDUIT_USER_AGENT=claude
+```
+
+## Event System
+
+Components communicate through an event bus:
+
+```bash
+# Emit an event
+💩 event:emit "component.action" --data='{"key":"value"}'
+
+# List recent events
+💩 event:list
+```
+
+## Development
+
+```bash
+# Run tests
+./vendor/bin/pest
+
+# Code quality checks
+composer check
+
+# Fix code style
+composer pint
+```
+
+## Requirements
+
+- PHP 8.2+
+- Composer
+- macOS/Linux (Windows via WSL)
 
 ## License
 
-Laravel Zero is an open-source software licensed under the MIT license.
+MIT
+
+## Credits
+
+Built with [Laravel Zero](https://laravel-zero.com) by Jordan Partridge and the Human-AI collective.
+
+---
+
+*THE SHIT - Because great tools should be fun to use.* 💩

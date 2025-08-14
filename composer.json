@@ -1,13 +1,13 @@
 {
     "name": "the-shit/core",
     "description": "THE SHIT - Scaling Humans Into Tomorrow",
-    "keywords": ["framework", "laravel", "laravel zero", "console", "cli", "shit", "tight"],
-    "homepage": "https://github.com/S-H-I-T/core",
+    "keywords": ["framework", "laravel", "laravel zero", "console", "cli", "ai", "automation"],
+    "homepage": "https://github.com/the-shit/core",
     "type": "project",
     "license": "MIT",
     "support": {
-        "issues": "https://github.com/S-H-I-T/core/issues",
-        "source": "https://github.com/S-H-I-T/core"
+        "issues": "https://github.com/the-shit/core/issues",
+        "source": "https://github.com/the-shit/core"
     },
     "authors": [
         {
@@ -30,6 +30,7 @@
         "mockery/mockery": "^1.6.12",
         "pestphp/pest": "^3.8.2"
     },
+    "bin": ["💩"],
     "autoload": {
         "psr-4": {
             "App\\": "app/",

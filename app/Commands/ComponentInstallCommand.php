@@ -3,14 +3,14 @@
 namespace App\Commands;
 
 use Illuminate\Support\Facades\Process;
-use JordanPartridge\GithubClient\Facades\Github;
 use JordanPartridge\GithubClient\Exceptions\ApiException;
+use JordanPartridge\GithubClient\Facades\Github;
 
 use function Laravel\Prompts\warning;
 
 class ComponentInstallCommand extends ConduitCommand
 {
-    protected $signature = 'install {component : Component name (e.g., spotify, github)} {version? : Version constraint (e.g., ^1.0, ~2.1, 1.2.3)} {--branch= : Install from a specific branch} {--json : Output as JSON}';
+    protected $signature = 'install {component : Component name (e.g., spotify, github)} {version? : Version constraint (e.g., ^1.0, ~2.1, 1.2.3)} {--branch= : Install from a specific branch} {--global : Install globally to ~/.shit/components} {--json : Output as JSON}';
 
     protected $description = 'Install a component from THE SHIT ecosystem';
 
@@ -19,7 +19,14 @@ class ComponentInstallCommand extends ConduitCommand
         $component = $this->argument('component');
         $version = $this->argument('version') ?? '*';
         $branch = $this->option('branch');
-        $componentsDir = base_path('💩-components');
+        
+        // Determine installation directory
+        if ($this->option('global')) {
+            $componentsDir = $_SERVER['HOME'] . '/.shit/components';
+        } else {
+            $componentsDir = base_path('💩-components');
+        }
+        
         $componentPath = $componentsDir.'/'.$component;
 
         // Check if already installed
@@ -38,10 +45,11 @@ class ComponentInstallCommand extends ConduitCommand
 
         // Find the component repository by searching for the conduit-component topic
         $repo = $this->findComponentRepository($component);
-        
-        if (!$repo) {
+
+        if (! $repo) {
             $this->forceOutput("❌ Component '{$component}' not found in Conduit ecosystem", 'error');
             $this->smartInfo("💡 Try running 'conduit search {$component}' to find available components");
+
             return self::FAILURE;
         }
 
@@ -49,17 +57,18 @@ class ComponentInstallCommand extends ConduitCommand
             // Check if --branch option was used
             if ($branch) {
                 $this->smartInfo("🌿 Installing from branch: {$branch}...");
+
                 return $this->cloneFromGitHub($repo, $componentPath, $branch);
             }
-            
+
             // Check if version is a branch reference (starts with branch: or contains /)
             if (str_starts_with($version, 'branch:') || str_contains($version, '/')) {
                 $branch = str_starts_with($version, 'branch:') ? substr($version, 7) : $version;
                 $this->smartInfo("🌿 Installing from branch: {$branch}...");
-                
+
                 return $this->cloneFromGitHub($repo, $componentPath, $branch);
             }
-            
+
             // Get releases from GitHub
             $releases = $this->getGitHubReleases($repo);
 
@@ -97,12 +106,12 @@ class ComponentInstallCommand extends ConduitCommand
         try {
             // Parse owner and repo from full name
             [$owner, $repoName] = explode('/', $repo);
-            
+
             // Use GitHub client to get releases
             $releases = Github::releases()->all($owner, $repoName);
-            
+
             // Convert ReleaseData objects to arrays for compatibility
-            return array_map(fn($release) => [
+            return array_map(fn ($release) => [
                 'tag_name' => $release->tag_name,
                 'name' => $release->name,
                 'prerelease' => $release->prerelease,
@@ -170,8 +179,12 @@ class ComponentInstallCommand extends ConduitCommand
             return self::FAILURE;
         }
 
-        // Remove .git directory to keep it clean
-        $this->exec("rm -rf {$path}/.git");
+        // Keep .git but set up as upstream (not origin)
+        // This allows users to fork later if they want to contribute
+        Process::path($path)->run('git remote rename origin upstream 2>/dev/null');
+
+        // Add helpful message about forking
+        $this->smartInfo("💡 To contribute changes, run: php 💩 component:fork {$repo}");
 
         // Install dependencies if composer.json exists
         if (file_exists($path.'/composer.json')) {
@@ -213,15 +226,15 @@ class ComponentInstallCommand extends ConduitCommand
         try {
             // Use the Repo value object for proper validation
             $repoObj = \JordanPartridge\GithubClient\ValueObjects\Repo::fromFullName($repo);
-            
+
             // Get the repository info to find default branch
             $repoData = Github::repos()->get($repoObj);
-            
+
             // If it's not master, make fun of them
             if ($repoData->default_branch !== 'master') {
                 $this->smartInfo("😏 Using '{$repoData->default_branch}' branch... how progressive of them");
             }
-            
+
             return $repoData->default_branch;
         } catch (\Exception $e) {
             // If we can't get the repo info, fallback to master
@@ -229,7 +242,7 @@ class ComponentInstallCommand extends ConduitCommand
             return 'master';
         }
     }
-    
+
     /**
      * Find a component repository by searching for component topics
      */
@@ -240,45 +253,48 @@ class ComponentInstallCommand extends ConduitCommand
             // If it ain't shit, we ain't installing it!
             $searchQuery = urlencode("topic:shit-component {$component} in:name");
             $response = \Illuminate\Support\Facades\Http::withHeaders([
-                'Accept' => 'application/vnd.github.v3+json', 
+                'Accept' => 'application/vnd.github.v3+json',
                 'User-Agent' => 'THE-SHIT-CLI',
             ])->get("https://api.github.com/search/repositories?q={$searchQuery}&sort=stars&order=desc");
-            
+
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 if ($data['total_count'] > 0) {
                     // Try to find exact match first
                     foreach ($data['items'] as $item) {
                         if (strtolower($item['name']) === strtolower($component)) {
                             $this->smartInfo("💩 Found THE SHIT component: {$item['full_name']}");
+
                             return $item['full_name'];
                         }
                     }
-                    
+
                     // If no exact match, take the first result
                     $firstMatch = $data['items'][0];
                     $this->smartInfo("💩 Found THE SHIT component: {$firstMatch['full_name']}");
+
                     return $firstMatch['full_name'];
                 }
             }
         } catch (\Exception $e) {
             // Search failed, fallback to config-based approach
         }
-        
+
         // Fallback to the configured organization
         $githubOrg = config('conduit.components.github_username', 'the-shit');
         $fallbackRepo = "{$githubOrg}/{$component}";
-        
+
         // Check if this repo exists
         try {
             $repoObj = \JordanPartridge\GithubClient\ValueObjects\Repo::fromFullName($fallbackRepo);
             Github::repos()->get($repoObj);
+
             return $fallbackRepo;
         } catch (\Exception $e) {
             // Repo doesn't exist
         }
-        
+
         return null;
     }
 }

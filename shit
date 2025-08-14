@@ -1,0 +1,45 @@
+#!/usr/bin/env php
+<?php
+
+define('LARAVEL_START', microtime(true));
+
+/*
+|--------------------------------------------------------------------------
+| Register The 💩 Auto Loader
+|--------------------------------------------------------------------------
+|
+| THE SHIT - Scaling Humans Into Tomorrow
+| Now executable as just 'shit' for better ergonomics!
+|
+*/
+
+require __DIR__.'/vendor/autoload.php';
+
+$app = require_once __DIR__.'/bootstrap/app.php';
+
+/*
+|--------------------------------------------------------------------------
+| Run The 💩 Application
+|--------------------------------------------------------------------------
+|
+| When we run "shit" from the command line, we'll load up this project
+| so that any components can be proxied to their actual commands.
+|
+*/
+
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+
+$status = $kernel->handle(
+    $input = new Symfony\Component\Console\Input\ArgvInput,
+    new Symfony\Component\Console\Output\ConsoleOutput
+);
+
+/*
+|--------------------------------------------------------------------------
+| Shutdown The Application
+|--------------------------------------------------------------------------
+*/
+
+$kernel->terminate($input, $status);
+
+exit($status);

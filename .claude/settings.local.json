@@ -11,7 +11,10 @@
       "Bash(conduit knowledge:search:*)",
       "Bash(conduit:*)",
       "Bash(composer:*)",
-      "Bash(./vendor/bin/phpstan analyse:*)"
+      "Bash(./vendor/bin/phpstan analyse:*)",
+      "Bash(cp:*)",
+      "Bash(💩 sites:delete shadetheory --json)",
+      "Bash(💩 sites:list)"
     ],
     "deny": []
   }

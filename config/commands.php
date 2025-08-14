@@ -63,6 +63,7 @@ return [
         Illuminate\Console\Scheduling\ScheduleFinishCommand::class,
         Illuminate\Foundation\Console\VendorPublishCommand::class,
         LaravelZero\Framework\Commands\StubPublishCommand::class,
+
     ],
 
     /*
@@ -77,18 +78,36 @@ return [
     */
 
     'remove' => [
-        // Remove test command since we have quality component
-        'test',
-        // Remove migrate commands - not needed in core
+        // Laravel make commands - developer tools only
+        'make:command',
+        'make:factory',
+        'make:migration',
+        'make:model',
+        'make:seeder',
+        'make:test',
+
+        // Migration commands - internal database operations
         'migrate',
         'migrate:fresh',
-        'migrate:install', 
+        'migrate:install',
         'migrate:refresh',
         'migrate:reset',
         'migrate:rollback',
         'migrate:status',
+
+        // Database commands - internal use
         'db:seed',
         'db:wipe',
+
+        // App build commands - internal use only
+        'app:build',
+        'app:install',
+        'app:rename',
+
+        // Test/debug commands - scaffolding only
+        'test',
+        'test:human-ai',
+        'debug:detection',
     ],
 
 ];
